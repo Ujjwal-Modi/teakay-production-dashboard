@@ -1,0 +1,1414 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Teakay Production Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<style>
+:root {
+  --color-bg: #f6f5f1; --color-panel: #ffffff; --color-fg: #1d1f24; --color-fg-muted: #5f6470; --color-border-line: #dedcd5;
+  --color-ok: #2f7a3e; --color-bad: #c0392b; --color-warn: #b7791f;
+  --cds-chart-grid: #ebe9e3; --cds-chart-axis: #b9b6ad; --cds-chart-reference: #1d1f24; --cds-chart-muted: #c9c6bd; --cds-chart-status-critical: #d9534f;
+  --cds-surface-popover: #ffffff; --cds-border: #dedcd5; --cds-shadow-popover: 0 4px 16px rgba(0,0,0,.12); --cds-text-secondary: #5f6470;
+  --font-anthropic-sans: "Inter Tight", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-anthropic-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --cds-font-size-caption: 0.78rem; --cds-font-size-body: 0.9rem; --cds-font-size-heading: 1rem; --cds-font-size-title: 1.75rem; --cds-font-weight-medium: 600;
+  --cds-gap-xs: 4px; --cds-gap-sm: 8px; --cds-gap-md: 14px; --cds-gap-lg: 22px; --cds-gap-xl: 32px;
+  --cds-pad-xs: 4px; --cds-pad-sm: 8px; --cds-pad-md: 12px; --cds-pad-lg: 16px; --cds-radius: 8px; --cds-dur-slow: .3s;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --color-bg: #15171b; --color-panel: #1e2126; --color-fg: #eceae4; --color-fg-muted: #a3a7b0; --color-border-line: #33363d;
+  --color-ok: #6cc07e; --color-bad: #ef7b6e; --cds-chart-grid: #2a2d33; --cds-chart-axis: #4a4e56; --cds-chart-reference: #eceae4; --cds-chart-muted: #4a4e56; --cds-chart-status-critical: #ef7b6e;
+  --cds-surface-popover: #24272d; --cds-border: #3a3d44; --cds-shadow-popover: 0 4px 16px rgba(0,0,0,.5); --cds-text-secondary: #a3a7b0;
+  color-scheme: dark; } }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body { background: var(--color-bg); color: var(--color-fg); font-family: var(--font-anthropic-sans); font-size: var(--cds-font-size-body); line-height: 1.45; }
+#dash-root { max-width: 1400px; margin-inline: auto; padding-block: 24px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.dash-skeleton { color: transparent !important; position: relative; }
+.dash-skeleton::after { content: ""; position: absolute; inset: 20% 0; border-radius: 6px; background: linear-gradient(90deg, var(--color-border-line), var(--color-panel), var(--color-border-line)); background-size: 200% 100%; animation: sk 1.2s linear infinite; }
+@keyframes sk { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .dash-skeleton::after { animation: none; } }
+.tk-reload { font: inherit; font-size: var(--cds-font-size-caption); color: var(--color-fg); background: transparent; border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: 2px 10px; cursor: pointer; margin-left: 6px; }
+.tk-reload:disabled { opacity: .5; cursor: progress; }
+.tk-err { color: var(--color-bad); }
+
+
+.tk { display: flex; flex-direction: column; gap: var(--cds-gap-lg); font-family: var(--font-anthropic-sans); font-variant-numeric: tabular-nums; }
+.tk-head { display: flex; flex-direction: column; gap: var(--cds-gap-xs); }
+.tk-title { margin: 0; font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); text-wrap: balance; }
+.tk-take { margin: 0; color: var(--color-fg-muted); font-size: var(--cds-font-size-body); max-width: 70ch; }
+.tk .tk-take b { font-weight: 600; color: var(--color-fg); }
+.tk .tk-take b.tk-bad { color: var(--color-bad); }
+.tk .tk-take b.tk-ok { color: var(--color-ok); }
+
+.tk-filters { display: flex; flex-wrap: wrap; gap: var(--cds-gap-sm); align-items: end; }
+.tk-f { display: flex; flex-direction: column; gap: 4px; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); min-width: 0; }
+.tk-f select { font: inherit; font-size: var(--cds-font-size-body); color: var(--color-fg); background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: 6px 10px; min-width: 9rem; max-width: 100%; }
+.tk-reset { font: inherit; font-size: var(--cds-font-size-body); color: var(--color-fg); background: transparent; border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: 6px 14px; cursor: pointer; }
+.tk-reset:disabled { opacity: .45; cursor: default; }
+.tk-reset:focus-visible, .tk-tab:focus-visible, .tk-seg-b:focus-visible, .tk-f select:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
+
+.tk-tabs { display: flex; gap: 2px; overflow-x: auto; border-bottom: 1px solid var(--color-border-line); }
+.tk-tab { font: inherit; font-size: var(--cds-font-size-body); background: none; border: 0; border-bottom: 2px solid transparent; color: var(--color-fg-muted); padding: 8px 12px; cursor: pointer; white-space: nowrap; margin-bottom: -1px; }
+.tk-tab[aria-selected="true"] { color: var(--color-fg); border-bottom-color: var(--color-fg); font-weight: var(--cds-font-weight-medium); }
+.tk-tab:hover { color: var(--color-fg); }
+
+.tk-page { display: flex; flex-direction: column; gap: var(--cds-gap-md); }
+.tk-lead { margin: 0; }
+.tk-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 12.5rem), 1fr)); gap: var(--cds-gap-sm); }
+.tk-tile { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-md); display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.tk-tiles-in .tk-tile { background: transparent; }
+.tk-lbl { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); letter-spacing: .02em; }
+.tk-big { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); line-height: 1.15; display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
+.tk-big small { font-family: var(--font-anthropic-sans); font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.tk-sub { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.tk .tk-bad { color: var(--color-bad); }
+.tk .tk-ok { color: var(--color-ok); }
+.tk-pill { font-size: var(--cds-font-size-caption); padding: 1px 8px; border-radius: 999px; border: 1px solid currentColor; }
+.tk-pill.bad { color: var(--color-bad); }
+.tk-pill.ok { color: var(--color-ok); }
+
+.tk-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); gap: var(--cds-gap-md); }
+.tk-card { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); display: flex; flex-direction: column; gap: var(--cds-gap-sm); min-width: 0; }
+.tk-h { margin: 0; font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); }
+.tk-note { margin: 0; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.tk-legend { display: flex; flex-wrap: wrap; gap: var(--cds-gap-sm); font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.tk-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.tk-legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+.tk-chart { position: relative; min-height: 230px; }
+.tk-svg { display: block; overflow: visible; }
+.tk-axis text { fill: var(--color-fg-muted); font-size: var(--cds-font-size-caption); font-family: var(--font-anthropic-sans); }
+.tk-gl { stroke: var(--cds-chart-grid); stroke-width: 1; }
+.tk-axisline { stroke: var(--cds-chart-axis); stroke-width: 1; }
+.tk-ref { stroke: var(--cds-chart-reference); stroke-width: 2; stroke-dasharray: 4 3; }
+.tk-bar { fill: var(--cds-chart-muted); }
+.tk-fill-bad { fill: var(--cds-chart-status-critical, var(--color-bad)); }
+.tk-fill-ok { fill: var(--color-ok); }
+.tk-line { fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.tk-svg circle { stroke-width: 2; }
+.tk-svg circle:not(.tk-fill-bad):not(.tk-fill-ok) { fill: var(--color-panel); }
+.tk-hover { fill: var(--color-fg); opacity: .05; pointer-events: none; }
+.tk-tip { position: absolute; pointer-events: none; background: var(--cds-surface-popover); border: 1px solid var(--cds-border); border-radius: var(--cds-radius); box-shadow: var(--cds-shadow-popover); padding: var(--cds-pad-xs) var(--cds-pad-sm); font-size: var(--cds-font-size-caption); white-space: nowrap; z-index: 2; display: flex; flex-direction: column; gap: 2px; }
+.tk-tip-h { color: var(--cds-text-secondary); }
+.tk-tip-l { display: flex; align-items: center; gap: 6px; }
+.tk-tip-l i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+.tk-tip-total { font-weight: var(--cds-font-weight-medium); }
+.tk-empty { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); padding: var(--cds-pad-md) 0; }
+.tk-chart .tk-empty, .tk-fail { display: flex; align-items: center; justify-content: center; min-height: 200px; gap: 8px; color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+.tk-fail i { width: .375rem; height: .375rem; border-radius: 50%; background: var(--color-bad); display: inline-block; }
+
+.tk-seg { display: flex; flex-wrap: wrap; gap: 4px; }
+.tk-seg-b { font: inherit; font-size: var(--cds-font-size-caption); background: transparent; color: var(--color-fg-muted); border: 1px solid var(--color-border-line); border-radius: 999px; padding: 3px 12px; cursor: pointer; }
+.tk-seg-b[aria-pressed="true"] { background: var(--color-fg); color: var(--color-bg); border-color: var(--color-fg); }
+.tk-tablebox { overflow: auto; max-height: 26rem; }
+.tk-table { width: 100%; border-collapse: collapse; font-size: var(--cds-font-size-caption); }
+.tk-table th { position: sticky; top: 0; background: var(--color-panel); text-align: left; font-weight: var(--cds-font-weight-medium); color: var(--color-fg-muted); padding: 6px 10px; border-bottom: 1px solid var(--color-border-line); white-space: nowrap; }
+.tk-table td { padding: 6px 10px; border-bottom: 1px solid var(--color-border-line); white-space: nowrap; }
+.tk-table .tk-n { text-align: right; }
+.tk-table td.tk-key { font-weight: var(--cds-font-weight-medium); }
+.tk-table.dash-skeleton { min-height: 6rem; }
+[data-dash-source-state=refreshing] { opacity: .5; transition: opacity var(--cds-dur-slow); }
+
+.tk-cf { display: flex; flex-wrap: wrap; gap: var(--cds-gap-xs) var(--cds-gap-sm); align-items: end; padding: var(--cds-pad-xs) 0; border-top: 1px solid var(--color-border-line); border-bottom: 1px solid var(--color-border-line); }
+.tk-cf-f { display: flex; flex-direction: column; gap: 2px; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); min-width: 0; }
+.tk-cf-f input, .tk-cf-f select { font: inherit; font-size: var(--cds-font-size-caption); color: var(--color-fg); background: var(--color-bg); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: 3px 6px; max-width: 100%; }
+.tk-cf-f select { min-width: 7.5rem; }
+.tk-cf-clear { font: inherit; font-size: var(--cds-font-size-caption); color: var(--color-fg); background: transparent; border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: 3px 10px; cursor: pointer; }
+.tk-cf-clear:disabled { opacity: .45; cursor: default; }
+.tk-cf-f input:focus-visible, .tk-cf-f select:focus-visible, .tk-cf-clear:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
+
+
+
+</style>
+</head>
+<body>
+<div id="dash-root">
+<div class="tk">
+<header class="tk-head" id="top">
+  <h1 class="tk-title">Teakay Production Dashboard</h1>
+  <p class="tk-take"><b data-draw="over" data-source="wrapper_cube broken_cube gas_cube elec_cube manpower_cube">—</b> of <b data-draw="checked" data-source="wrapper_cube broken_cube gas_cube elec_cube manpower_cube">—</b> standards are above limit for this selection (wrapper, laddi, shrink, broken, gas, electricity, manpower). Red is above standard, green is at or below.</p>
+  <p class="tk-take tk-fresh">Live from the Production sheet. <span class="tk-upd" aria-live="polite">Loading…</span> <button type="button" class="tk-reload">Reload data</button></p>
+</header>
+
+<div class="tk-filters" id="filters">
+  <label class="tk-f"><span>Month</span><select data-draw="opt" data-param="month" data-all="All months" data-source="sheet" aria-label="Month"></select></label>
+  <label class="tk-f"><span>Week</span><select data-draw="opt" data-param="week" data-all="All weeks" data-source="sheet" aria-label="Week"></select></label>
+  <label class="tk-f"><span>Shift</span><select data-draw="opt" data-param="shift" data-all="All shifts" data-source="sheet" aria-label="Shift"></select></label>
+  <label class="tk-f"><span>SKU</span><select data-draw="opt" data-param="sku" data-all="All SKUs" data-source="sheet" aria-label="SKU"></select></label>
+  <label class="tk-f"><span>Incharge</span><select data-draw="opt" data-param="incharge" data-all="All incharges" data-source="sheet" aria-label="Incharge"></select></label>
+  <button type="button" class="tk-reset">Reset</button>
+</div>
+
+<nav class="tk-tabs" role="tablist" aria-label="Sections">
+  <button type="button" class="tk-tab" role="tab" data-tab="overview" aria-selected="true">Overview</button>
+  <button type="button" class="tk-tab" role="tab" data-tab="wastage" aria-selected="false">Wrapper &amp; broken</button>
+  <button type="button" class="tk-tab" role="tab" data-tab="sweepage" aria-selected="false">Sweepage</button>
+  <button type="button" class="tk-tab" role="tab" data-tab="scrap" aria-selected="false">Scrap</button>
+  <button type="button" class="tk-tab" role="tab" data-tab="rmvar" aria-selected="false">RM variance</button>
+  <button type="button" class="tk-tab" role="tab" data-tab="breakdown" aria-selected="false">Breakdown</button>
+  <button type="button" class="tk-tab" role="tab" data-tab="utilities" aria-selected="false">Gas, power &amp; manpower</button>
+</nav>
+
+<!-- ================= OVERVIEW ================= -->
+<section class="tk-page" id="overview">
+  <div class="tk-tiles">
+    <div class="tk-tile"><div class="tk-lbl">Production</div><div class="tk-big"><span data-draw="kpi" data-source="broken_cube" data-field="prod_kg" data-dec="0">—</span><small>kg</small></div><div class="tk-sub">From the Broken tab</div></div>
+    <div class="tk-tile"><div class="tk-lbl">Wrapper wastage</div><div class="tk-big"><span data-draw="kpi" data-pill data-source="wrapper_cube" data-field="w_waste_pct" data-target="w_allow_pct">—</span><small>%</small></div><div class="tk-sub">Allowed <span data-draw="kpi" data-source="wrapper_cube" data-field="w_allow_pct">—</span>% <span class="tk-pill bad" hidden>Above std</span><span class="tk-pill ok" hidden>Within std</span></div></div>
+    <div class="tk-tile"><div class="tk-lbl">Broken</div><div class="tk-big"><span data-draw="kpi" data-pill data-source="broken_cube" data-field="broken_pct" data-target="@broken">—</span><small>%</small></div><div class="tk-sub">Limit <span data-draw="limit" data-limit="broken" data-dec="0">—</span>% <span class="tk-pill bad" hidden>Above limit</span><span class="tk-pill ok" hidden>Within limit</span></div></div>
+    <div class="tk-tile"><div class="tk-lbl">Total sweepage</div><div class="tk-big"><span data-draw="kpi" data-source="sweep_cube" data-field="total_pct" data-dec="3">—</span><small>%</small></div><div class="tk-sub"><span data-draw="kpi" data-source="sweep_cube" data-field="total_kg">—</span> kg of production</div></div>
+    <div class="tk-tile"><div class="tk-lbl">Gas per MT</div><div class="tk-big"><span data-draw="kpi" data-pill data-source="gas_cube" data-field="per_mt" data-target="std">—</span></div><div class="tk-sub">Std <span data-draw="kpi" data-source="gas_cube" data-field="std">—</span> · vs std <span data-draw="kpi" data-signed data-source="gas_cube" data-field="vs_std" data-target="@zero">—</span> <span class="tk-pill bad" hidden>Above std</span><span class="tk-pill ok" hidden>Within std</span></div></div>
+    <div class="tk-tile"><div class="tk-lbl">Electricity units per MT</div><div class="tk-big"><span data-draw="kpi" data-pill data-source="elec_cube" data-field="per_mt" data-target="std">—</span></div><div class="tk-sub">Std <span data-draw="kpi" data-source="elec_cube" data-field="std">—</span> · vs std <span data-draw="kpi" data-signed data-source="elec_cube" data-field="vs_std" data-target="@zero">—</span> <span class="tk-pill bad" hidden>Above std</span><span class="tk-pill ok" hidden>Within std</span></div></div>
+    <div class="tk-tile"><div class="tk-lbl">Manpower cost per kg</div><div class="tk-big"><small>₹</small><span data-draw="kpi" data-pill data-source="manpower_cube" data-field="per_kg" data-target="std">—</span></div><div class="tk-sub">Std ₹<span data-draw="kpi" data-source="manpower_cube" data-field="std">—</span> · vs std <span data-draw="kpi" data-signed data-source="manpower_cube" data-field="vs_std" data-target="@zero">—</span> <span class="tk-pill bad" hidden>Above std</span><span class="tk-pill ok" hidden>Within std</span></div></div>
+    <div class="tk-tile"><div class="tk-lbl">Breakdown</div><div class="tk-big"><span data-draw="kpi" data-source="breakdown_cube" data-field="bd_total">—</span><small>hrs</small></div><div class="tk-sub"><span data-draw="kpi" data-source="breakdown_cube" data-field="bd_pct">—</span>% of <span data-draw="kpi" data-source="breakdown_cube" data-field="run_hours">—</span> running hrs</div></div>
+    <div class="tk-tile"><div class="tk-lbl">RM used over BOM</div><div class="tk-big"><span data-draw="kpi" data-signed data-pill data-source="rm_cube" data-extra="rm=All" data-field="excess" data-target="@zero">—</span><small>kg</small></div><div class="tk-sub"><span data-draw="kpi" data-signed data-source="rm_cube" data-extra="rm=All" data-field="excess_pct">—</span>% of BOM <span class="tk-pill bad" hidden>Over BOM</span><span class="tk-pill ok" hidden>Within BOM</span></div></div>
+  </div>
+
+  <div class="tk-grid">
+    <article class="tk-card" id="ov-wrapper">
+      <h2 class="tk-h">Wrapper, laddi &amp; shrink wastage %, day wise</h2>
+      <p class="tk-note">Wastage over standard use. Red bars are above the allowed % (dashed tick), green within it.</p>
+      <div class="tk-seg" role="group" aria-label="Material">
+      <button type="button" class="tk-seg-b" data-seg-group="mat-ov_wrap" data-seg="w" aria-pressed="true">Wrapper</button>
+      <button type="button" class="tk-seg-b" data-seg-group="mat-ov_wrap" data-seg="l" aria-pressed="false">Laddi</button>
+      <button type="button" class="tk-seg-b" data-seg-group="mat-ov_wrap" data-seg="s" aria-pressed="false">Shrink</button>
+      </div><div class="tk-cf" role="group" aria-label="Chart filters"><label class="tk-cf-f"><span>From</span><input type="date" class="tk-cf-d" id="ov_wrap_from" data-p="ov_wrap_from" min="2000-01-01" max="2099-12-31"></label><label class="tk-cf-f"><span>To</span><input type="date" class="tk-cf-d" id="ov_wrap_to" data-p="ov_wrap_to" min="2000-01-01" max="2099-12-31"></label><label class="tk-cf-f"><span>Week</span><select id="ov_wrap_week" data-draw="copt" data-dim="week" data-p="ov_wrap_week" data-all="As top filter" data-source="sheet"></select></label><label class="tk-cf-f"><span>Shift</span><select id="ov_wrap_shift" data-draw="copt" data-dim="shift" data-p="ov_wrap_shift" data-all="As top filter" data-source="sheet"></select></label><label class="tk-cf-f"><span>SKU</span><select id="ov_wrap_sku" data-draw="copt" data-dim="sku" data-p="ov_wrap_sku" data-all="As top filter" data-source="sheet"></select></label><button type="button" class="tk-cf-clear" data-chart="ov_wrap">Clear</button></div>
+      <div data-seg-panel="mat-ov_wrap" data-seg="w"><div class="tk-chart" data-draw="bars" data-chart="ov_wrap" data-source="wrapper_cube" data-fields="w_waste_pct" data-target="w_allow_pct" data-unit="%"></div></div>
+      <div data-seg-panel="mat-ov_wrap" data-seg="l" hidden><div class="tk-chart" data-draw="bars" data-chart="ov_wrap" data-source="wrapper_cube" data-fields="l_waste_pct" data-target="l_allow_pct" data-unit="%"></div></div>
+      <div data-seg-panel="mat-ov_wrap" data-seg="s" hidden><div class="tk-chart" data-draw="bars" data-chart="ov_wrap" data-source="wrapper_cube" data-fields="s_waste_pct" data-target="s_allow_pct" data-unit="%"></div></div>
+    </article>
+    <article class="tk-card" id="ov-broken">
+      <h2 class="tk-h">Broken %, day wise</h2>
+      <p class="tk-note">Broken kg over production kg. Red bars are above the <span data-draw="limit" data-limit="broken" data-dec="0">—</span>% limit (dashed).</p>
+      <div class="tk-cf" role="group" aria-label="Chart filters"><label class="tk-cf-f"><span>From</span><input type="date" class="tk-cf-d" id="ov_broken_from" data-p="ov_broken_from" min="2000-01-01" max="2099-12-31"></label><label class="tk-cf-f"><span>To</span><input type="date" class="tk-cf-d" id="ov_broken_to" data-p="ov_broken_to" min="2000-01-01" max="2099-12-31"></label><label class="tk-cf-f"><span>Week</span><select id="ov_broken_week" data-draw="copt" data-dim="week" data-p="ov_broken_week" data-all="As top filter" data-source="sheet"></select></label><label class="tk-cf-f"><span>Shift</span><select id="ov_broken_shift" data-draw="copt" data-dim="shift" data-p="ov_broken_shift" data-all="As top filter" data-source="sheet"></select></label><label class="tk-cf-f"><span>SKU</span><select id="ov_broken_sku" data-draw="copt" data-dim="sku" data-p="ov_broken_sku" data-all="As top filter" data-source="sheet"></select></label><button type="button" class="tk-cf-clear" data-chart="ov_broken">Clear</button></div>
+      <div class="tk-chart" data-chart="ov_broken" data-draw="bars" data-source="broken_cube" data-fields="broken_pct" data-target="@broken" data-unit="%"></div>
+    </article>
+    <article class="tk-card" id="ov-gas">
+      <h2 class="tk-h">Gas per MT vs std, day wise</h2>
+      <p class="tk-note">Dashed tick is the day's standard.</p>
+      <div class="tk-cf" role="group" aria-label="Chart filters"><label class="tk-cf-f"><span>From</span><input type="date" class="tk-cf-d" id="ov_gas_from" data-p="ov_gas_from" min="2000-01-01" max="2099-12-31"></label><label class="tk-cf-f"><span>To</span><input type="date" class="tk-cf-d" id="ov_gas_to" data-p="ov_gas_to" min="2000-01-01" max="2099-12-31"></label><label class="tk-cf-f"><span>Week</span><select id="ov_gas_week" data-draw="copt" data-dim="week" data-p="ov_gas_week" data-all="As top filter" data-source="sheet"></select></label><label class="tk-cf-f"><span>Shift</span><select id="ov_gas_shift" data-draw="copt" data-dim="shift" data-p="ov_gas_shift" data-all="As top filter" data-source="sheet"></select></label><label class="tk-cf-f"><span>SKU</span><select id="ov_gas_sku" data-draw="copt" data-dim="sku" data-p="ov_gas_sku" data-all="As top filter" data-source="sheet"></select></label><button type="button" class="tk-cf-clear" data-chart="ov_gas">Clear</button></div>
+      <div class="tk-chart" data-chart="ov_gas" data-draw="bars" data-source="gas_cube" data-fields="per_mt" data-target="std"></div>
+    </article>
+    <article class="tk-card" id="ov-elec">
+      <h2 class="tk-h">Electricity units per MT vs std, day wise</h2>
+      <p class="tk-note">Dashed tick is the day's standard.</p>
+      <div class="tk-cf" role="group" aria-label="Chart filters"><label class="tk-cf-f"><span>From</span><input type="date" class="tk-cf-d" id="ov_elec_from" data-p="ov_elec_from" min="2000-01-01" max="2099-12-31"></label><label class="tk-cf-f"><span>To</span><input type="date" class="tk-cf-d" id="ov_elec_to" data-p="ov_elec_to" min="2000-01-01" max="2099-12-31"></label><label class="tk-cf-f"><span>Week</span><select id="ov_elec_week" data-draw="copt" data-dim="week" data-p="ov_elec_week" data-all="As top filter" data-source="sheet"></select></label><label class="tk-cf-f"><span>Shift</span><select id="ov_elec_shift" data-draw="copt" data-dim="shift" data-p="ov_elec_shift" data-all="As top filter" data-source="sheet"></select></label><label class="tk-cf-f"><span>SKU</span><select id="ov_elec_sku" data-draw="copt" data-dim="sku" data-p="ov_elec_sku" data-all="As top filter" data-source="sheet"></select></label><button type="button" class="tk-cf-clear" data-chart="ov_elec">Clear</button></div>
+      <div class="tk-chart" data-chart="ov_elec" data-draw="bars" data-source="elec_cube" data-fields="per_mt" data-target="std"></div>
+    </article>
+  </div>
+</section>
+
+<!-- ================= WRAPPER & BROKEN ================= -->
+<section class="tk-page" id="wastage" hidden>
+  <div class="tk-tiles">
+    <div class="tk-tile"><div class="tk-lbl">Wrapper wastage</div><div class="tk-big"><span data-draw="kpi" data-pill data-source="wrapper_cube" data-field="w_waste_pct" data-target="w_allow_pct">—</span><small>%</small></div><div class="tk-sub">Allowed <span data-draw="kpi" data-source="wrapper_cube" data-field="w_allow_pct">—</span>% · excess <span data-draw="kpi" data-signed data-source="wrapper_cube" data-field="w_excess_kg" data-target="@zero">—</span> kg <span class="tk-pill bad" hidden>Above std</span><span class="tk-pill ok" hidden>Within std</span></div></div>
+    <div class="tk-tile"><div class="tk-lbl">Laddi wastage</div><div class="tk-big"><span data-draw="kpi" data-pill data-source="wrapper_cube" data-field="l_waste_pct" data-target="l_allow_pct">—</span><small>%</small></div><div class="tk-sub">Allowed <span data-draw="kpi" data-source="wrapper_cube" data-field="l_allow_pct">—</span>% · excess <span data-draw="kpi" data-signed data-source="wrapper_cube" data-field="l_excess_kg" data-target="@zero">—</span> kg <span class="tk-pill bad" hidden>Above std</span><span class="tk-pill ok" hidden>Within std</span></div></div>
+    <div class="tk-tile"><div class="tk-lbl">Shrink wastage</div><div class="tk-big"><span data-draw="kpi" data-pill data-source="wrapper_cube" data-field="s_waste_pct" data-target="s_allow_pct">—</span><small>%</small></div><div class="tk-sub">Allowed <span data-draw="kpi" data-source="wrapper_cube" data-field="s_allow_pct">—</span>% · excess <span data-draw="kpi" data-signed data-source="wrapper_cube" data-field="s_excess_kg" data-target="@zero">—</span> kg <span class="tk-pill bad" hidden>Above std</span><span class="tk-pill ok" hidden>Within std</span></div></div>
+    <div class="tk-tile"><div class="tk-lbl">Broken</div><div class="tk-big"><span data-draw="kpi" data-pill data-source="broken_cube" data-field="broken_pct" data-target="@broken">—</span><small>%</small></div><div class="tk-sub"><span data-draw="kpi" data-source="broken_cube" data-field="broken_kg">—</span> kg · limit <span data-draw="limit" data-limit="broken" data-dec="0">—</span>% <span class="tk-pill bad" hidden>Above limit</span><span class="tk-pill ok" hidden>Within limit</span></div></div>
+  </div>
+  <div class="tk-grid">
+    <article class="tk-card" id="w-day">
+      <h2 class="tk-h">Wastage % vs allowed, day wise</h2>
+      <p class="tk-note">Red bars are above the allowed % (dashed tick), green within it.</p>
+      <div class="tk-seg" role="group" aria-label="Material">
+      <button type="button" class="tk-seg-b" data-seg-group="mat-w_day" data-seg="w" aria-pressed="true">Wrapper</button>
+      <button type="button" class="tk-seg-b" data-seg-group="mat-w_day" data-seg="l" aria-pressed="false">Laddi</button>
+      <button type="button" class="tk-seg-b" data-seg-group="mat-w_day" data-seg="s" aria-pressed="false">Shrink</button>
+      </div><div class="tk-cf" role="group" aria-label="Chart filters"><label class="tk-cf-f"><span>From</span><input type="date" class="tk-cf-d" id="w_day_from" data-p="w_day_from" min="2000-01-01" max="2099-12-31"></label><label class="tk-cf-f"><span>To</span><input type="date" class="tk-cf-d" id="w_day_to" data-p="w_day_to" min="2000-01-01" max="2099-12-31"></label><label class="tk-cf-f"><span>Week</span><select id="w_day_week" data-draw="copt" data-dim="week" data-p="w_day_week" data-all="As top filter" data-source="sheet"></select></label><label class="tk-cf-f"><span>Shift</span><select id="w_day_shift" data-draw="copt" data-dim="shift" data-p="w_day_shift" data-all="As top filter" data-source="sheet"></select></label><label class="tk-cf-f"><span>SKU</span><select id="w_day_sku" data-draw="copt" data-dim="sku" data-p="w_day_sku" data-all="As top filter" data-source="sheet"></select></label><button type="button" class="tk-cf-clear" data-chart="w_day">Clear</button></div>
+      <div data-seg-panel="mat-w_day" data-seg="w"><div class="tk-chart" data-draw="bars" data-chart="w_day" data-source="wrapper_cube" data-fields="w_waste_pct" data-target="w_allow_pct" data-unit="%"></div></div>
+      <div data-seg-panel="mat-w_day" data-seg="l" hidden><div class="tk-chart" data-draw="bars" data-chart="w_day" data-source="wrapper_cube" data-fields="l_waste_pct" data-target="l_allow_pct" data-unit="%"></div></div>
+      <div data-seg-panel="mat-w_day" data-seg="s" hidden><div class="tk-chart" data-draw="bars" data-chart="w_day" data-source="wrapper_cube" data-fields="s_waste_pct" data-target="s_allow_pct" data-unit="%"></div></div>
+    </article>
+    <article class="tk-card" id="w-month">
+      <h2 class="tk-h">Wastage % vs allowed, month wise</h2>
+      <p class="tk-note">Every month in the sheet, for the shift, SKU and incharge chosen.</p>
+      <div class="tk-seg" role="group" aria-label="Material">
+      <button type="button" class="tk-seg-b" data-seg-group="mat-w_month" data-seg="w" aria-pressed="true">Wrapper</button>
+      <button type="button" class="tk-seg-b" data-seg-group="mat-w_month" data-seg="l" aria-pressed="false">Laddi</button>
+      <button type="button" class="tk-seg-b" data-seg-group="mat-w_month" data-seg="s" aria-pressed="false">Shrink</button>
+      </div><div class="tk-cf" role="group" aria-label="Chart filters"><label class="tk-cf-f"><span>From</span><input type="date" class="tk-cf-d" id="w_month_from" data-p="w_month_from" min="2000-01-01" max="2099-12-31"></label><label class="tk-cf-f"><span>To</span><input type="date" class="tk-cf-d" id="w_month_to" data-p="w_month_to" min="2000-01-01" max="2099-12-31"></label><label class="tk-cf-f"><span>Week</span><select id="w_month_week" data-draw="copt" data-dim="week" data-p="w_month_week" data-all="As top filter" data-source="sheet"></select></label><label class="tk-cf-f"><span>Shift</span><select id="w_month_shift" data-draw="copt" data-dim="shift" data-p="w_month_shift" data-all="As top filter" data-source="sheet"></select></label><label class="tk-cf-f"><span>SKU</span><select id="w_month_sku" data-draw="copt" data-dim="sku" data-p="w_month_sku" data-all="As top filter" data-source="sheet"></select></label><button type="button" class="tk-cf-clear" data-chart="w_month">Clear</button></div>
+      <div data-seg-panel="mat-w_month" data-seg="w"><div class="tk-chart" data-draw="bars" data-chart="w_month" data-grain="month" data-source="wrapper_cube" data-fields="w_waste_pct" data-target="w_allow_pct" data-unit="%"></div></div>
+      <div data-seg-panel="mat-w_month" data-seg="l" hidden><div class="tk-chart" data-draw="bars" data-chart="w_month" data-grain="month" data-source="wrapper_cube" data-fields="l_waste_pct" data-target="l_allow_pct" data-unit="%"></div></div>
+      <div data-seg-panel="mat-w_month" data-seg="s" hidden><div class="tk-chart" data-draw="bars" data-chart="w_month" data-grain="month" data-source="wrapper_cube" data-fields="s_waste_pct" data-target="s_allow_pct" data-unit="%"></div></div>
+    </article>
+    <article class="tk-card" id="b-day">
+      <h2 class="tk-h">Broken %, day wise</h2>
+      <p class="tk-note">Red above the <span data-draw="limit" data-limit="broken" data-dec="0">—</span>% limit, green below.</p>
+      <div class="tk-cf" role="group" aria-label="Chart filters"><label class="tk-cf-f"><span>From</span><input type="date" class="tk-cf-d" id="b_day_from" data-p="b_day_from" min="2000-01-01" max="2099-12-31"></label><label class="tk-cf-f"><span>To</span><input type="date" class="tk-cf-d" id="b_day_to" data-p="b_day_to" min="2000-01-01" max="2099-12-31"></label><label class="tk-cf-f"><span>Week</span><select id="b_day_week" data-draw="copt" data-dim="week" data-p="b_day_week" data-all="As top filter" data-source="sheet"></select></label><label class="tk-cf-f"><span>Shift</span><select id="b_day_shift" data-draw="copt" data-dim="shift" data-p="b_day_shift" data-all="As top filter" data-source="sheet"></select></label><label class="tk-cf-f"><span>SKU</span><select id="b_day_sku" data-draw="copt" data-dim="sku" data-p="b_day_sku" data-all="As top filter" data-source="sheet"></select></label><button type="button" class="tk-cf-clear" data-chart="b_day">Clear</button></div>
+      <div class="tk-chart" data-chart="b_day" data-draw="bars" data-source="broken_cube" data-fields="broken_pct" data-target="@broken" data-unit="%"></div>
+    </article>
+    <article class="tk-card" id="b-month">
+      <h2 class="tk-h">Broken %, month wise</h2>
+      <p class="tk-note">Every month in the sheet, for the shift, SKU and incharge chosen.</p>
+      <div class="tk-cf" role="group" aria-label="Chart filters"><label class="tk-cf-f"><span>From</span><input type="date" class="tk-cf-d" id="b_month_from" data-p="b_month_from" min="2000-01-01" max="2099-12-31"></label><label class="tk-cf-f"><span>To</span><input type="date" class="tk-cf-d" id="b_month_to" data-p="b_month_to" min="2000-01-01" max="2099-12-31"></label><label class="tk-cf-f"><span>Week</span><select id="b_month_week" data-draw="copt" data-dim="week" data-p="b_month_week" data-all="As top filter" data-source="sheet"></select></label><label class="tk-cf-f"><span>Shift</span><select id="b_month_shift" data-draw="copt" data-dim="shift" data-p="b_month_shift" data-all="As top filter" data-source="sheet"></select></label><label class="tk-cf-f"><span>SKU</span><select id="b_month_sku" data-draw="copt" data-dim="sku" data-p="b_month_sku" data-all="As top filter" data-source="sheet"></select></label><button type="button" class="tk-cf-clear" data-chart="b_month">Clear</button></div>
+      <div class="tk-chart" data-chart="b_month" data-draw="bars" data-grain="month" data-source="broken_cube" data-fields="broken_pct" data-target="@broken" data-unit="%"></div>
+    </article>
+  </div>
+  <article class="tk-card tk-wide" id="w-table">
+    <h2 class="tk-h">Wrapper, laddi &amp; shrink breakdown</h2>
+    <p class="tk-note">Wastage % is red above its allowed %; excess kg is use beyond the allowed quantity.</p>
+    <div class="tk-seg" role="group" aria-label="Break down by">
+<button type="button" class="tk-seg-b" data-seg-group="seg-wrapper_cube-8913" data-seg="date" aria-pressed="true">Day</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-wrapper_cube-8913" data-seg="week" aria-pressed="false">Week</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-wrapper_cube-8913" data-seg="month" aria-pressed="false">Month</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-wrapper_cube-8913" data-seg="shift" aria-pressed="false">Shift</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-wrapper_cube-8913" data-seg="sku" aria-pressed="false">SKU</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-wrapper_cube-8913" data-seg="incharge" aria-pressed="false">Incharge</button>
+</div>
+<div class="tk-tablebox" data-seg-panel="seg-wrapper_cube-8913" data-seg="date"><table class="tk-table"><thead><tr><th scope="col">Date</th><th scope="col" class="tk-n">Wrapper %</th><th scope="col" class="tk-n">Laddi %</th><th scope="col" class="tk-n">Shrink %</th><th scope="col" class="tk-n">Wrapper excess kg</th><th scope="col" class="tk-n">Laddi excess kg</th><th scope="col" class="tk-n">Shrink excess kg</th><th scope="col" class="tk-n">Wrapper used kg</th></tr></thead><tbody data-draw="split" data-source="wrapper_cube" data-dim="date" data-cols="w_waste_pct:2:w_allow_pct,l_waste_pct:2:l_allow_pct,s_waste_pct:2:s_allow_pct,w_excess_kg:2:@zero,l_excess_kg:2:@zero,s_excess_kg:2:@zero,w_actual_kg:2:"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-wrapper_cube-8913" data-seg="week" hidden><table class="tk-table"><thead><tr><th scope="col">Week</th><th scope="col" class="tk-n">Wrapper %</th><th scope="col" class="tk-n">Laddi %</th><th scope="col" class="tk-n">Shrink %</th><th scope="col" class="tk-n">Wrapper excess kg</th><th scope="col" class="tk-n">Laddi excess kg</th><th scope="col" class="tk-n">Shrink excess kg</th><th scope="col" class="tk-n">Wrapper used kg</th></tr></thead><tbody data-draw="split" data-source="wrapper_cube" data-dim="week" data-cols="w_waste_pct:2:w_allow_pct,l_waste_pct:2:l_allow_pct,s_waste_pct:2:s_allow_pct,w_excess_kg:2:@zero,l_excess_kg:2:@zero,s_excess_kg:2:@zero,w_actual_kg:2:"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-wrapper_cube-8913" data-seg="month" hidden><table class="tk-table"><thead><tr><th scope="col">Month</th><th scope="col" class="tk-n">Wrapper %</th><th scope="col" class="tk-n">Laddi %</th><th scope="col" class="tk-n">Shrink %</th><th scope="col" class="tk-n">Wrapper excess kg</th><th scope="col" class="tk-n">Laddi excess kg</th><th scope="col" class="tk-n">Shrink excess kg</th><th scope="col" class="tk-n">Wrapper used kg</th></tr></thead><tbody data-draw="split" data-source="wrapper_cube" data-dim="month" data-cols="w_waste_pct:2:w_allow_pct,l_waste_pct:2:l_allow_pct,s_waste_pct:2:s_allow_pct,w_excess_kg:2:@zero,l_excess_kg:2:@zero,s_excess_kg:2:@zero,w_actual_kg:2:"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-wrapper_cube-8913" data-seg="shift" hidden><table class="tk-table"><thead><tr><th scope="col">Shift</th><th scope="col" class="tk-n">Wrapper %</th><th scope="col" class="tk-n">Laddi %</th><th scope="col" class="tk-n">Shrink %</th><th scope="col" class="tk-n">Wrapper excess kg</th><th scope="col" class="tk-n">Laddi excess kg</th><th scope="col" class="tk-n">Shrink excess kg</th><th scope="col" class="tk-n">Wrapper used kg</th></tr></thead><tbody data-draw="split" data-source="wrapper_cube" data-dim="shift" data-cols="w_waste_pct:2:w_allow_pct,l_waste_pct:2:l_allow_pct,s_waste_pct:2:s_allow_pct,w_excess_kg:2:@zero,l_excess_kg:2:@zero,s_excess_kg:2:@zero,w_actual_kg:2:"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-wrapper_cube-8913" data-seg="sku" hidden><table class="tk-table"><thead><tr><th scope="col">SKU</th><th scope="col" class="tk-n">Wrapper %</th><th scope="col" class="tk-n">Laddi %</th><th scope="col" class="tk-n">Shrink %</th><th scope="col" class="tk-n">Wrapper excess kg</th><th scope="col" class="tk-n">Laddi excess kg</th><th scope="col" class="tk-n">Shrink excess kg</th><th scope="col" class="tk-n">Wrapper used kg</th></tr></thead><tbody data-draw="split" data-source="wrapper_cube" data-dim="sku" data-cols="w_waste_pct:2:w_allow_pct,l_waste_pct:2:l_allow_pct,s_waste_pct:2:s_allow_pct,w_excess_kg:2:@zero,l_excess_kg:2:@zero,s_excess_kg:2:@zero,w_actual_kg:2:"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-wrapper_cube-8913" data-seg="incharge" hidden><table class="tk-table"><thead><tr><th scope="col">Incharge</th><th scope="col" class="tk-n">Wrapper %</th><th scope="col" class="tk-n">Laddi %</th><th scope="col" class="tk-n">Shrink %</th><th scope="col" class="tk-n">Wrapper excess kg</th><th scope="col" class="tk-n">Laddi excess kg</th><th scope="col" class="tk-n">Shrink excess kg</th><th scope="col" class="tk-n">Wrapper used kg</th></tr></thead><tbody data-draw="split" data-source="wrapper_cube" data-dim="incharge" data-cols="w_waste_pct:2:w_allow_pct,l_waste_pct:2:l_allow_pct,s_waste_pct:2:s_allow_pct,w_excess_kg:2:@zero,l_excess_kg:2:@zero,s_excess_kg:2:@zero,w_actual_kg:2:"></tbody></table></div>
+  </article>
+  <article class="tk-card tk-wide" id="b-table">
+    <h2 class="tk-h">Broken breakdown</h2>
+    <div class="tk-seg" role="group" aria-label="Break down by">
+<button type="button" class="tk-seg-b" data-seg-group="seg-broken_cube-7359" data-seg="date" aria-pressed="true">Day</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-broken_cube-7359" data-seg="week" aria-pressed="false">Week</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-broken_cube-7359" data-seg="month" aria-pressed="false">Month</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-broken_cube-7359" data-seg="shift" aria-pressed="false">Shift</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-broken_cube-7359" data-seg="sku" aria-pressed="false">SKU</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-broken_cube-7359" data-seg="incharge" aria-pressed="false">Incharge</button>
+</div>
+<div class="tk-tablebox" data-seg-panel="seg-broken_cube-7359" data-seg="date"><table class="tk-table"><thead><tr><th scope="col">Date</th><th scope="col" class="tk-n">Production kg</th><th scope="col" class="tk-n">Broken kg</th><th scope="col" class="tk-n">Broken %</th></tr></thead><tbody data-draw="split" data-source="broken_cube" data-dim="date" data-cols="prod_kg:0:,broken_kg:2:,broken_pct:2:@broken"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-broken_cube-7359" data-seg="week" hidden><table class="tk-table"><thead><tr><th scope="col">Week</th><th scope="col" class="tk-n">Production kg</th><th scope="col" class="tk-n">Broken kg</th><th scope="col" class="tk-n">Broken %</th></tr></thead><tbody data-draw="split" data-source="broken_cube" data-dim="week" data-cols="prod_kg:0:,broken_kg:2:,broken_pct:2:@broken"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-broken_cube-7359" data-seg="month" hidden><table class="tk-table"><thead><tr><th scope="col">Month</th><th scope="col" class="tk-n">Production kg</th><th scope="col" class="tk-n">Broken kg</th><th scope="col" class="tk-n">Broken %</th></tr></thead><tbody data-draw="split" data-source="broken_cube" data-dim="month" data-cols="prod_kg:0:,broken_kg:2:,broken_pct:2:@broken"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-broken_cube-7359" data-seg="shift" hidden><table class="tk-table"><thead><tr><th scope="col">Shift</th><th scope="col" class="tk-n">Production kg</th><th scope="col" class="tk-n">Broken kg</th><th scope="col" class="tk-n">Broken %</th></tr></thead><tbody data-draw="split" data-source="broken_cube" data-dim="shift" data-cols="prod_kg:0:,broken_kg:2:,broken_pct:2:@broken"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-broken_cube-7359" data-seg="sku" hidden><table class="tk-table"><thead><tr><th scope="col">SKU</th><th scope="col" class="tk-n">Production kg</th><th scope="col" class="tk-n">Broken kg</th><th scope="col" class="tk-n">Broken %</th></tr></thead><tbody data-draw="split" data-source="broken_cube" data-dim="sku" data-cols="prod_kg:0:,broken_kg:2:,broken_pct:2:@broken"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-broken_cube-7359" data-seg="incharge" hidden><table class="tk-table"><thead><tr><th scope="col">Incharge</th><th scope="col" class="tk-n">Production kg</th><th scope="col" class="tk-n">Broken kg</th><th scope="col" class="tk-n">Broken %</th></tr></thead><tbody data-draw="split" data-source="broken_cube" data-dim="incharge" data-cols="prod_kg:0:,broken_kg:2:,broken_pct:2:@broken"></tbody></table></div>
+  </article>
+</section>
+
+<!-- ================= SWEEPAGE ================= -->
+<section class="tk-page" id="sweepage" hidden>
+  <p class="tk-note tk-lead">Each item as % of production kg. Red above <span data-draw="limit" data-limit="sweep">—</span>%, green at or below.</p>
+  <div class="tk-tiles">
+    <div class="tk-tile"><div class="tk-lbl">Dough</div><div class="tk-big"><span data-draw="kpi" data-source="sweep_cube" data-field="dough_pct" data-dec="3" data-target="@sweep">—</span><small>%</small></div><div class="tk-sub"><span data-draw="kpi" data-source="sweep_cube" data-field="dough_kg">—</span> kg</div></div>
+    <div class="tk-tile"><div class="tk-lbl">Chura</div><div class="tk-big"><span data-draw="kpi" data-source="sweep_cube" data-field="chura_pct" data-dec="3" data-target="@sweep">—</span><small>%</small></div><div class="tk-sub"><span data-draw="kpi" data-source="sweep_cube" data-field="chura_kg">—</span> kg</div></div>
+    <div class="tk-tile"><div class="tk-lbl">Floor sweepage</div><div class="tk-big"><span data-draw="kpi" data-source="sweep_cube" data-field="floor_pct" data-dec="3" data-target="@sweep">—</span><small>%</small></div><div class="tk-sub"><span data-draw="kpi" data-source="sweep_cube" data-field="floor_kg">—</span> kg</div></div>
+    <div class="tk-tile"><div class="tk-lbl">Cream</div><div class="tk-big"><span data-draw="kpi" data-source="sweep_cube" data-field="cream_pct" data-dec="3" data-target="@sweep">—</span><small>%</small></div><div class="tk-sub"><span data-draw="kpi" data-source="sweep_cube" data-field="cream_kg">—</span> kg</div></div>
+    <div class="tk-tile"><div class="tk-lbl">Maida</div><div class="tk-big"><span data-draw="kpi" data-source="sweep_cube" data-field="maida_pct" data-dec="3" data-target="@sweep">—</span><small>%</small></div><div class="tk-sub"><span data-draw="kpi" data-source="sweep_cube" data-field="maida_kg">—</span> kg</div></div>
+    <div class="tk-tile"><div class="tk-lbl">Sugar</div><div class="tk-big"><span data-draw="kpi" data-source="sweep_cube" data-field="sugar_pct" data-dec="3" data-target="@sweep">—</span><small>%</small></div><div class="tk-sub"><span data-draw="kpi" data-source="sweep_cube" data-field="sugar_kg">—</span> kg</div></div>
+  </div>
+  <article class="tk-card tk-wide" id="sw-day">
+    <h2 class="tk-h">Sweepage kg, day wise</h2>
+    <p class="tk-note">Stacked by item.</p>
+    <div class="tk-legend"><span><i class="s0"></i>Dough</span><span><i class="s1"></i>Chura</span><span><i class="s2"></i>Floor</span><span><i class="s3"></i>Cream</span><span><i class="s4"></i>Maida</span><span><i class="s5"></i>Sugar</span></div>
+    <div class="tk-cf" role="group" aria-label="Chart filters"><label class="tk-cf-f"><span>From</span><input type="date" class="tk-cf-d" id="sw_day_from" data-p="sw_day_from" min="2000-01-01" max="2099-12-31"></label><label class="tk-cf-f"><span>To</span><input type="date" class="tk-cf-d" id="sw_day_to" data-p="sw_day_to" min="2000-01-01" max="2099-12-31"></label><label class="tk-cf-f"><span>Week</span><select id="sw_day_week" data-draw="copt" data-dim="week" data-p="sw_day_week" data-all="As top filter" data-source="sheet"></select></label><label class="tk-cf-f"><span>Shift</span><select id="sw_day_shift" data-draw="copt" data-dim="shift" data-p="sw_day_shift" data-all="As top filter" data-source="sheet"></select></label><label class="tk-cf-f"><span>SKU</span><select id="sw_day_sku" data-draw="copt" data-dim="sku" data-p="sw_day_sku" data-all="As top filter" data-source="sheet"></select></label><button type="button" class="tk-cf-clear" data-chart="sw_day">Clear</button></div>
+      <div class="tk-chart" data-chart="sw_day" data-draw="stack" data-source="sweep_cube" data-fields="dough_kg,chura_kg,floor_kg,cream_kg,maida_kg,sugar_kg" data-names="Dough,Chura,Floor,Cream,Maida,Sugar" data-unit=" kg"></div>
+  </article>
+  <article class="tk-card tk-wide" id="sw-table">
+    <h2 class="tk-h">Sweepage breakdown</h2>
+    <div class="tk-seg" role="group" aria-label="Break down by">
+<button type="button" class="tk-seg-b" data-seg-group="seg-sweep_cube-266" data-seg="date" aria-pressed="true">Day</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-sweep_cube-266" data-seg="week" aria-pressed="false">Week</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-sweep_cube-266" data-seg="shift" aria-pressed="false">Shift</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-sweep_cube-266" data-seg="sku" aria-pressed="false">SKU</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-sweep_cube-266" data-seg="incharge" aria-pressed="false">Incharge</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-sweep_cube-266" data-seg="month" aria-pressed="false">Month</button>
+</div>
+<div class="tk-tablebox" data-seg-panel="seg-sweep_cube-266" data-seg="date"><table class="tk-table"><thead><tr><th scope="col">Date</th><th scope="col" class="tk-n">Production kg</th><th scope="col" class="tk-n">Dough %</th><th scope="col" class="tk-n">Chura %</th><th scope="col" class="tk-n">Floor %</th><th scope="col" class="tk-n">Cream %</th><th scope="col" class="tk-n">Maida %</th><th scope="col" class="tk-n">Sugar %</th><th scope="col" class="tk-n">Total kg</th><th scope="col" class="tk-n">Total %</th></tr></thead><tbody data-draw="split" data-source="sweep_cube" data-dim="date" data-cols="prod_kg:0:,dough_pct:3:@sweep,chura_pct:3:@sweep,floor_pct:3:@sweep,cream_pct:3:@sweep,maida_pct:3:@sweep,sugar_pct:3:@sweep,total_kg:2:,total_pct:3:"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-sweep_cube-266" data-seg="week" hidden><table class="tk-table"><thead><tr><th scope="col">Week</th><th scope="col" class="tk-n">Production kg</th><th scope="col" class="tk-n">Dough %</th><th scope="col" class="tk-n">Chura %</th><th scope="col" class="tk-n">Floor %</th><th scope="col" class="tk-n">Cream %</th><th scope="col" class="tk-n">Maida %</th><th scope="col" class="tk-n">Sugar %</th><th scope="col" class="tk-n">Total kg</th><th scope="col" class="tk-n">Total %</th></tr></thead><tbody data-draw="split" data-source="sweep_cube" data-dim="week" data-cols="prod_kg:0:,dough_pct:3:@sweep,chura_pct:3:@sweep,floor_pct:3:@sweep,cream_pct:3:@sweep,maida_pct:3:@sweep,sugar_pct:3:@sweep,total_kg:2:,total_pct:3:"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-sweep_cube-266" data-seg="shift" hidden><table class="tk-table"><thead><tr><th scope="col">Shift</th><th scope="col" class="tk-n">Production kg</th><th scope="col" class="tk-n">Dough %</th><th scope="col" class="tk-n">Chura %</th><th scope="col" class="tk-n">Floor %</th><th scope="col" class="tk-n">Cream %</th><th scope="col" class="tk-n">Maida %</th><th scope="col" class="tk-n">Sugar %</th><th scope="col" class="tk-n">Total kg</th><th scope="col" class="tk-n">Total %</th></tr></thead><tbody data-draw="split" data-source="sweep_cube" data-dim="shift" data-cols="prod_kg:0:,dough_pct:3:@sweep,chura_pct:3:@sweep,floor_pct:3:@sweep,cream_pct:3:@sweep,maida_pct:3:@sweep,sugar_pct:3:@sweep,total_kg:2:,total_pct:3:"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-sweep_cube-266" data-seg="sku" hidden><table class="tk-table"><thead><tr><th scope="col">SKU</th><th scope="col" class="tk-n">Production kg</th><th scope="col" class="tk-n">Dough %</th><th scope="col" class="tk-n">Chura %</th><th scope="col" class="tk-n">Floor %</th><th scope="col" class="tk-n">Cream %</th><th scope="col" class="tk-n">Maida %</th><th scope="col" class="tk-n">Sugar %</th><th scope="col" class="tk-n">Total kg</th><th scope="col" class="tk-n">Total %</th></tr></thead><tbody data-draw="split" data-source="sweep_cube" data-dim="sku" data-cols="prod_kg:0:,dough_pct:3:@sweep,chura_pct:3:@sweep,floor_pct:3:@sweep,cream_pct:3:@sweep,maida_pct:3:@sweep,sugar_pct:3:@sweep,total_kg:2:,total_pct:3:"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-sweep_cube-266" data-seg="incharge" hidden><table class="tk-table"><thead><tr><th scope="col">Incharge</th><th scope="col" class="tk-n">Production kg</th><th scope="col" class="tk-n">Dough %</th><th scope="col" class="tk-n">Chura %</th><th scope="col" class="tk-n">Floor %</th><th scope="col" class="tk-n">Cream %</th><th scope="col" class="tk-n">Maida %</th><th scope="col" class="tk-n">Sugar %</th><th scope="col" class="tk-n">Total kg</th><th scope="col" class="tk-n">Total %</th></tr></thead><tbody data-draw="split" data-source="sweep_cube" data-dim="incharge" data-cols="prod_kg:0:,dough_pct:3:@sweep,chura_pct:3:@sweep,floor_pct:3:@sweep,cream_pct:3:@sweep,maida_pct:3:@sweep,sugar_pct:3:@sweep,total_kg:2:,total_pct:3:"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-sweep_cube-266" data-seg="month" hidden><table class="tk-table"><thead><tr><th scope="col">Month</th><th scope="col" class="tk-n">Production kg</th><th scope="col" class="tk-n">Dough %</th><th scope="col" class="tk-n">Chura %</th><th scope="col" class="tk-n">Floor %</th><th scope="col" class="tk-n">Cream %</th><th scope="col" class="tk-n">Maida %</th><th scope="col" class="tk-n">Sugar %</th><th scope="col" class="tk-n">Total kg</th><th scope="col" class="tk-n">Total %</th></tr></thead><tbody data-draw="split" data-source="sweep_cube" data-dim="month" data-cols="prod_kg:0:,dough_pct:3:@sweep,chura_pct:3:@sweep,floor_pct:3:@sweep,cream_pct:3:@sweep,maida_pct:3:@sweep,sugar_pct:3:@sweep,total_kg:2:,total_pct:3:"></tbody></table></div>
+  </article>
+</section>
+
+<!-- ================= SCRAP ================= -->
+<section class="tk-page" id="scrap" hidden>
+  <div class="tk-tiles">
+    <div class="tk-tile"><div class="tk-lbl">Core</div><div class="tk-big"><span data-draw="kpi" data-source="scrap_cube" data-field="core" data-dec="0">—</span></div></div>
+    <div class="tk-tile"><div class="tk-lbl">Maida bags</div><div class="tk-big"><span data-draw="kpi" data-source="scrap_cube" data-field="maida_bags" data-dec="0">—</span></div></div>
+    <div class="tk-tile"><div class="tk-lbl">Sugar bags</div><div class="tk-big"><span data-draw="kpi" data-source="scrap_cube" data-field="sugar_bags" data-dec="0">—</span></div></div>
+    <div class="tk-tile"><div class="tk-lbl">Jar</div><div class="tk-big"><span data-draw="kpi" data-source="scrap_cube" data-field="jar" data-dec="0">—</span></div></div>
+    <div class="tk-tile"><div class="tk-lbl">Chemical bags</div><div class="tk-big"><span data-draw="kpi" data-source="scrap_cube" data-field="chemical_bags" data-dec="0">—</span></div></div>
+    <div class="tk-tile"><div class="tk-lbl">Drum</div><div class="tk-big"><span data-draw="kpi" data-source="scrap_cube" data-field="drum" data-dec="0">—</span></div></div>
+    <div class="tk-tile"><div class="tk-lbl">Bottle</div><div class="tk-big"><span data-draw="kpi" data-source="scrap_cube" data-field="bottle" data-dec="0">—</span></div></div>
+  </div>
+  <article class="tk-card tk-wide" id="sc-table">
+    <h2 class="tk-h">Scrap per day</h2>
+    <p class="tk-note">Quantities as entered in the Srap tab.</p>
+    <div class="tk-seg" role="group" aria-label="Break down by">
+<button type="button" class="tk-seg-b" data-seg-group="seg-scrap_cube-4230" data-seg="date" aria-pressed="true">Day</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-scrap_cube-4230" data-seg="week" aria-pressed="false">Week</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-scrap_cube-4230" data-seg="month" aria-pressed="false">Month</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-scrap_cube-4230" data-seg="shift" aria-pressed="false">Shift</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-scrap_cube-4230" data-seg="sku" aria-pressed="false">SKU</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-scrap_cube-4230" data-seg="incharge" aria-pressed="false">Incharge</button>
+</div>
+<div class="tk-tablebox" data-seg-panel="seg-scrap_cube-4230" data-seg="date"><table class="tk-table"><thead><tr><th scope="col">Date</th><th scope="col" class="tk-n">Core</th><th scope="col" class="tk-n">Maida bags</th><th scope="col" class="tk-n">Sugar bags</th><th scope="col" class="tk-n">Jar</th><th scope="col" class="tk-n">Chemical bags</th><th scope="col" class="tk-n">Drum</th><th scope="col" class="tk-n">Bottle</th></tr></thead><tbody data-draw="split" data-source="scrap_cube" data-dim="date" data-cols="core:0:,maida_bags:0:,sugar_bags:0:,jar:0:,chemical_bags:0:,drum:0:,bottle:0:"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-scrap_cube-4230" data-seg="week" hidden><table class="tk-table"><thead><tr><th scope="col">Week</th><th scope="col" class="tk-n">Core</th><th scope="col" class="tk-n">Maida bags</th><th scope="col" class="tk-n">Sugar bags</th><th scope="col" class="tk-n">Jar</th><th scope="col" class="tk-n">Chemical bags</th><th scope="col" class="tk-n">Drum</th><th scope="col" class="tk-n">Bottle</th></tr></thead><tbody data-draw="split" data-source="scrap_cube" data-dim="week" data-cols="core:0:,maida_bags:0:,sugar_bags:0:,jar:0:,chemical_bags:0:,drum:0:,bottle:0:"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-scrap_cube-4230" data-seg="month" hidden><table class="tk-table"><thead><tr><th scope="col">Month</th><th scope="col" class="tk-n">Core</th><th scope="col" class="tk-n">Maida bags</th><th scope="col" class="tk-n">Sugar bags</th><th scope="col" class="tk-n">Jar</th><th scope="col" class="tk-n">Chemical bags</th><th scope="col" class="tk-n">Drum</th><th scope="col" class="tk-n">Bottle</th></tr></thead><tbody data-draw="split" data-source="scrap_cube" data-dim="month" data-cols="core:0:,maida_bags:0:,sugar_bags:0:,jar:0:,chemical_bags:0:,drum:0:,bottle:0:"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-scrap_cube-4230" data-seg="shift" hidden><table class="tk-table"><thead><tr><th scope="col">Shift</th><th scope="col" class="tk-n">Core</th><th scope="col" class="tk-n">Maida bags</th><th scope="col" class="tk-n">Sugar bags</th><th scope="col" class="tk-n">Jar</th><th scope="col" class="tk-n">Chemical bags</th><th scope="col" class="tk-n">Drum</th><th scope="col" class="tk-n">Bottle</th></tr></thead><tbody data-draw="split" data-source="scrap_cube" data-dim="shift" data-cols="core:0:,maida_bags:0:,sugar_bags:0:,jar:0:,chemical_bags:0:,drum:0:,bottle:0:"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-scrap_cube-4230" data-seg="sku" hidden><table class="tk-table"><thead><tr><th scope="col">SKU</th><th scope="col" class="tk-n">Core</th><th scope="col" class="tk-n">Maida bags</th><th scope="col" class="tk-n">Sugar bags</th><th scope="col" class="tk-n">Jar</th><th scope="col" class="tk-n">Chemical bags</th><th scope="col" class="tk-n">Drum</th><th scope="col" class="tk-n">Bottle</th></tr></thead><tbody data-draw="split" data-source="scrap_cube" data-dim="sku" data-cols="core:0:,maida_bags:0:,sugar_bags:0:,jar:0:,chemical_bags:0:,drum:0:,bottle:0:"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-scrap_cube-4230" data-seg="incharge" hidden><table class="tk-table"><thead><tr><th scope="col">Incharge</th><th scope="col" class="tk-n">Core</th><th scope="col" class="tk-n">Maida bags</th><th scope="col" class="tk-n">Sugar bags</th><th scope="col" class="tk-n">Jar</th><th scope="col" class="tk-n">Chemical bags</th><th scope="col" class="tk-n">Drum</th><th scope="col" class="tk-n">Bottle</th></tr></thead><tbody data-draw="split" data-source="scrap_cube" data-dim="incharge" data-cols="core:0:,maida_bags:0:,sugar_bags:0:,jar:0:,chemical_bags:0:,drum:0:,bottle:0:"></tbody></table></div>
+  </article>
+</section>
+
+<!-- ================= RM VARIANCE ================= -->
+<section class="tk-page" id="rmvar" hidden>
+  <p class="tk-note tk-lead">Variance = actual − BOM. Red is more than BOM, green is BOM or less.</p>
+  <div class="tk-tiles">
+    <div class="tk-tile"><div class="tk-lbl">RM as per BOM</div><div class="tk-big"><span data-draw="kpi" data-source="rm_cube" data-extra="rm=All" data-field="bom">—</span><small>kg</small></div></div>
+    <div class="tk-tile"><div class="tk-lbl">Actual RM used</div><div class="tk-big"><span data-draw="kpi" data-source="rm_cube" data-extra="rm=All" data-field="actual">—</span><small>kg</small></div></div>
+    <div class="tk-tile"><div class="tk-lbl">Variance</div><div class="tk-big"><span data-draw="kpi" data-signed data-pill data-source="rm_cube" data-extra="rm=All" data-field="excess" data-target="@zero">—</span><small>kg</small></div><div class="tk-sub"><span class="tk-pill bad" hidden>Over BOM</span><span class="tk-pill ok" hidden>Within BOM</span></div></div>
+    <div class="tk-tile"><div class="tk-lbl">Variance % of BOM</div><div class="tk-big"><span data-draw="kpi" data-signed data-source="rm_cube" data-extra="rm=All" data-field="excess_pct" data-target="@zero">—</span><small>%</small></div></div>
+  </div>
+  <article class="tk-card tk-wide" id="rm-day">
+    <h2 class="tk-h">RM variance %, day wise</h2>
+    <p class="tk-note">All raw materials together; above zero means more used than BOM.</p>
+    <div class="tk-cf" role="group" aria-label="Chart filters"><label class="tk-cf-f"><span>From</span><input type="date" class="tk-cf-d" id="rm_day_from" data-p="rm_day_from" min="2000-01-01" max="2099-12-31"></label><label class="tk-cf-f"><span>To</span><input type="date" class="tk-cf-d" id="rm_day_to" data-p="rm_day_to" min="2000-01-01" max="2099-12-31"></label><label class="tk-cf-f"><span>Week</span><select id="rm_day_week" data-draw="copt" data-dim="week" data-p="rm_day_week" data-all="As top filter" data-source="sheet"></select></label><label class="tk-cf-f"><span>Shift</span><select id="rm_day_shift" data-draw="copt" data-dim="shift" data-p="rm_day_shift" data-all="As top filter" data-source="sheet"></select></label><label class="tk-cf-f"><span>SKU</span><select id="rm_day_sku" data-draw="copt" data-dim="sku" data-p="rm_day_sku" data-all="As top filter" data-source="sheet"></select></label><button type="button" class="tk-cf-clear" data-chart="rm_day">Clear</button></div>
+      <div class="tk-chart" data-chart="rm_day" data-draw="bars" data-source="rm_cube" data-extra="rm=All" data-fields="excess_pct" data-target="@zero" data-unit="%"></div>
+  </article>
+  <article class="tk-card tk-wide" id="rm-table">
+    <h2 class="tk-h">RM variance breakdown</h2>
+    <div class="tk-seg" role="group" aria-label="Break down by">
+<button type="button" class="tk-seg-b" data-seg-group="seg-rm_cube-4021" data-seg="rm" aria-pressed="true">Raw material</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-rm_cube-4021" data-seg="date" aria-pressed="false">Day</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-rm_cube-4021" data-seg="week" aria-pressed="false">Week</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-rm_cube-4021" data-seg="shift" aria-pressed="false">Shift</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-rm_cube-4021" data-seg="sku" aria-pressed="false">SKU</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-rm_cube-4021" data-seg="incharge" aria-pressed="false">Incharge</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-rm_cube-4021" data-seg="month" aria-pressed="false">Month</button>
+</div>
+<div class="tk-tablebox" data-seg-panel="seg-rm_cube-4021" data-seg="rm"><table class="tk-table"><thead><tr><th scope="col">Raw material</th><th scope="col" class="tk-n">BOM</th><th scope="col" class="tk-n">Actual</th><th scope="col" class="tk-n">Variance</th><th scope="col" class="tk-n">Variance %</th></tr></thead><tbody data-draw="split" data-source="rm_cube" data-dim="rm" data-cols="bom:3:,actual:3:,excess:3:@zero,excess_pct:2:@zero" data-extra="rm=All"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-rm_cube-4021" data-seg="date" hidden><table class="tk-table"><thead><tr><th scope="col">Date</th><th scope="col" class="tk-n">BOM</th><th scope="col" class="tk-n">Actual</th><th scope="col" class="tk-n">Variance</th><th scope="col" class="tk-n">Variance %</th></tr></thead><tbody data-draw="split" data-source="rm_cube" data-dim="date" data-cols="bom:3:,actual:3:,excess:3:@zero,excess_pct:2:@zero" data-extra="rm=All"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-rm_cube-4021" data-seg="week" hidden><table class="tk-table"><thead><tr><th scope="col">Week</th><th scope="col" class="tk-n">BOM</th><th scope="col" class="tk-n">Actual</th><th scope="col" class="tk-n">Variance</th><th scope="col" class="tk-n">Variance %</th></tr></thead><tbody data-draw="split" data-source="rm_cube" data-dim="week" data-cols="bom:3:,actual:3:,excess:3:@zero,excess_pct:2:@zero" data-extra="rm=All"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-rm_cube-4021" data-seg="shift" hidden><table class="tk-table"><thead><tr><th scope="col">Shift</th><th scope="col" class="tk-n">BOM</th><th scope="col" class="tk-n">Actual</th><th scope="col" class="tk-n">Variance</th><th scope="col" class="tk-n">Variance %</th></tr></thead><tbody data-draw="split" data-source="rm_cube" data-dim="shift" data-cols="bom:3:,actual:3:,excess:3:@zero,excess_pct:2:@zero" data-extra="rm=All"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-rm_cube-4021" data-seg="sku" hidden><table class="tk-table"><thead><tr><th scope="col">SKU</th><th scope="col" class="tk-n">BOM</th><th scope="col" class="tk-n">Actual</th><th scope="col" class="tk-n">Variance</th><th scope="col" class="tk-n">Variance %</th></tr></thead><tbody data-draw="split" data-source="rm_cube" data-dim="sku" data-cols="bom:3:,actual:3:,excess:3:@zero,excess_pct:2:@zero" data-extra="rm=All"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-rm_cube-4021" data-seg="incharge" hidden><table class="tk-table"><thead><tr><th scope="col">Incharge</th><th scope="col" class="tk-n">BOM</th><th scope="col" class="tk-n">Actual</th><th scope="col" class="tk-n">Variance</th><th scope="col" class="tk-n">Variance %</th></tr></thead><tbody data-draw="split" data-source="rm_cube" data-dim="incharge" data-cols="bom:3:,actual:3:,excess:3:@zero,excess_pct:2:@zero" data-extra="rm=All"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-rm_cube-4021" data-seg="month" hidden><table class="tk-table"><thead><tr><th scope="col">Month</th><th scope="col" class="tk-n">BOM</th><th scope="col" class="tk-n">Actual</th><th scope="col" class="tk-n">Variance</th><th scope="col" class="tk-n">Variance %</th></tr></thead><tbody data-draw="split" data-source="rm_cube" data-dim="month" data-cols="bom:3:,actual:3:,excess:3:@zero,excess_pct:2:@zero" data-extra="rm=All"></tbody></table></div>
+  </article>
+</section>
+
+<!-- ================= BREAKDOWN ================= -->
+<section class="tk-page" id="breakdown" hidden>
+  <div class="tk-tiles">
+    <div class="tk-tile"><div class="tk-lbl">Total breakdown</div><div class="tk-big"><span data-draw="kpi" data-source="breakdown_cube" data-field="bd_total">—</span><small>hrs</small></div><div class="tk-sub"><span data-draw="kpi" data-source="breakdown_cube" data-field="bd_pct">—</span>% of <span data-draw="kpi" data-source="breakdown_cube" data-field="run_hours">—</span> running hrs</div></div>
+    <div class="tk-tile"><div class="tk-lbl">Machine</div><div class="tk-big"><span data-draw="kpi" data-source="breakdown_cube" data-field="bd_machine">—</span><small>hrs</small></div></div>
+    <div class="tk-tile"><div class="tk-lbl">Oven</div><div class="tk-big"><span data-draw="kpi" data-source="breakdown_cube" data-field="bd_oven">—</span><small>hrs</small></div></div>
+    <div class="tk-tile"><div class="tk-lbl">Mixing</div><div class="tk-big"><span data-draw="kpi" data-source="breakdown_cube" data-field="bd_mixing">—</span><small>hrs</small></div></div>
+    <div class="tk-tile"><div class="tk-lbl">Packing</div><div class="tk-big"><span data-draw="kpi" data-source="breakdown_cube" data-field="bd_packing">—</span><small>hrs</small></div></div>
+    <div class="tk-tile"><div class="tk-lbl">Manpower</div><div class="tk-big"><span data-draw="kpi" data-source="breakdown_cube" data-field="bd_manpower">—</span><small>hrs</small></div></div>
+    <div class="tk-tile"><div class="tk-lbl">Electricity</div><div class="tk-big"><span data-draw="kpi" data-source="breakdown_cube" data-field="bd_electricity">—</span><small>hrs</small></div></div>
+  </div>
+  <article class="tk-card tk-wide" id="bd-day">
+    <h2 class="tk-h">Breakdown hours, day wise</h2>
+    <p class="tk-note">Stacked by cause.</p>
+    <div class="tk-legend"><span><i class="s0"></i>Machine</span><span><i class="s1"></i>Oven</span><span><i class="s2"></i>Mixing</span><span><i class="s3"></i>Packing</span><span><i class="s4"></i>Manpower</span><span><i class="s5"></i>Electricity</span></div>
+    <div class="tk-cf" role="group" aria-label="Chart filters"><label class="tk-cf-f"><span>From</span><input type="date" class="tk-cf-d" id="bd_day_from" data-p="bd_day_from" min="2000-01-01" max="2099-12-31"></label><label class="tk-cf-f"><span>To</span><input type="date" class="tk-cf-d" id="bd_day_to" data-p="bd_day_to" min="2000-01-01" max="2099-12-31"></label><label class="tk-cf-f"><span>Week</span><select id="bd_day_week" data-draw="copt" data-dim="week" data-p="bd_day_week" data-all="As top filter" data-source="sheet"></select></label><label class="tk-cf-f"><span>Shift</span><select id="bd_day_shift" data-draw="copt" data-dim="shift" data-p="bd_day_shift" data-all="As top filter" data-source="sheet"></select></label><label class="tk-cf-f"><span>SKU</span><select id="bd_day_sku" data-draw="copt" data-dim="sku" data-p="bd_day_sku" data-all="As top filter" data-source="sheet"></select></label><button type="button" class="tk-cf-clear" data-chart="bd_day">Clear</button></div>
+      <div class="tk-chart" data-chart="bd_day" data-draw="stack" data-source="breakdown_cube" data-fields="bd_machine,bd_oven,bd_mixing,bd_packing,bd_manpower,bd_electricity" data-names="Machine,Oven,Mixing,Packing,Manpower,Electricity" data-unit=" hrs"></div>
+  </article>
+  <article class="tk-card tk-wide" id="bd-table">
+    <h2 class="tk-h">Breakdown by day, shift, SKU and incharge</h2>
+    <div class="tk-seg" role="group" aria-label="Break down by">
+<button type="button" class="tk-seg-b" data-seg-group="seg-breakdown_cube-9582" data-seg="date" aria-pressed="true">Day</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-breakdown_cube-9582" data-seg="week" aria-pressed="false">Week</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-breakdown_cube-9582" data-seg="month" aria-pressed="false">Month</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-breakdown_cube-9582" data-seg="shift" aria-pressed="false">Shift</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-breakdown_cube-9582" data-seg="sku" aria-pressed="false">SKU</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-breakdown_cube-9582" data-seg="incharge" aria-pressed="false">Incharge</button>
+</div>
+<div class="tk-tablebox" data-seg-panel="seg-breakdown_cube-9582" data-seg="date"><table class="tk-table"><thead><tr><th scope="col">Date</th><th scope="col" class="tk-n">Running hrs</th><th scope="col" class="tk-n">Machine</th><th scope="col" class="tk-n">Oven</th><th scope="col" class="tk-n">Mixing</th><th scope="col" class="tk-n">Packing</th><th scope="col" class="tk-n">Manpower</th><th scope="col" class="tk-n">Electricity</th><th scope="col" class="tk-n">Total hrs</th><th scope="col" class="tk-n">% of running</th></tr></thead><tbody data-draw="split" data-source="breakdown_cube" data-dim="date" data-cols="run_hours:2:,bd_machine:2:,bd_oven:2:,bd_mixing:2:,bd_packing:2:,bd_manpower:2:,bd_electricity:2:,bd_total:2:,bd_pct:2:"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-breakdown_cube-9582" data-seg="week" hidden><table class="tk-table"><thead><tr><th scope="col">Week</th><th scope="col" class="tk-n">Running hrs</th><th scope="col" class="tk-n">Machine</th><th scope="col" class="tk-n">Oven</th><th scope="col" class="tk-n">Mixing</th><th scope="col" class="tk-n">Packing</th><th scope="col" class="tk-n">Manpower</th><th scope="col" class="tk-n">Electricity</th><th scope="col" class="tk-n">Total hrs</th><th scope="col" class="tk-n">% of running</th></tr></thead><tbody data-draw="split" data-source="breakdown_cube" data-dim="week" data-cols="run_hours:2:,bd_machine:2:,bd_oven:2:,bd_mixing:2:,bd_packing:2:,bd_manpower:2:,bd_electricity:2:,bd_total:2:,bd_pct:2:"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-breakdown_cube-9582" data-seg="month" hidden><table class="tk-table"><thead><tr><th scope="col">Month</th><th scope="col" class="tk-n">Running hrs</th><th scope="col" class="tk-n">Machine</th><th scope="col" class="tk-n">Oven</th><th scope="col" class="tk-n">Mixing</th><th scope="col" class="tk-n">Packing</th><th scope="col" class="tk-n">Manpower</th><th scope="col" class="tk-n">Electricity</th><th scope="col" class="tk-n">Total hrs</th><th scope="col" class="tk-n">% of running</th></tr></thead><tbody data-draw="split" data-source="breakdown_cube" data-dim="month" data-cols="run_hours:2:,bd_machine:2:,bd_oven:2:,bd_mixing:2:,bd_packing:2:,bd_manpower:2:,bd_electricity:2:,bd_total:2:,bd_pct:2:"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-breakdown_cube-9582" data-seg="shift" hidden><table class="tk-table"><thead><tr><th scope="col">Shift</th><th scope="col" class="tk-n">Running hrs</th><th scope="col" class="tk-n">Machine</th><th scope="col" class="tk-n">Oven</th><th scope="col" class="tk-n">Mixing</th><th scope="col" class="tk-n">Packing</th><th scope="col" class="tk-n">Manpower</th><th scope="col" class="tk-n">Electricity</th><th scope="col" class="tk-n">Total hrs</th><th scope="col" class="tk-n">% of running</th></tr></thead><tbody data-draw="split" data-source="breakdown_cube" data-dim="shift" data-cols="run_hours:2:,bd_machine:2:,bd_oven:2:,bd_mixing:2:,bd_packing:2:,bd_manpower:2:,bd_electricity:2:,bd_total:2:,bd_pct:2:"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-breakdown_cube-9582" data-seg="sku" hidden><table class="tk-table"><thead><tr><th scope="col">SKU</th><th scope="col" class="tk-n">Running hrs</th><th scope="col" class="tk-n">Machine</th><th scope="col" class="tk-n">Oven</th><th scope="col" class="tk-n">Mixing</th><th scope="col" class="tk-n">Packing</th><th scope="col" class="tk-n">Manpower</th><th scope="col" class="tk-n">Electricity</th><th scope="col" class="tk-n">Total hrs</th><th scope="col" class="tk-n">% of running</th></tr></thead><tbody data-draw="split" data-source="breakdown_cube" data-dim="sku" data-cols="run_hours:2:,bd_machine:2:,bd_oven:2:,bd_mixing:2:,bd_packing:2:,bd_manpower:2:,bd_electricity:2:,bd_total:2:,bd_pct:2:"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-breakdown_cube-9582" data-seg="incharge" hidden><table class="tk-table"><thead><tr><th scope="col">Incharge</th><th scope="col" class="tk-n">Running hrs</th><th scope="col" class="tk-n">Machine</th><th scope="col" class="tk-n">Oven</th><th scope="col" class="tk-n">Mixing</th><th scope="col" class="tk-n">Packing</th><th scope="col" class="tk-n">Manpower</th><th scope="col" class="tk-n">Electricity</th><th scope="col" class="tk-n">Total hrs</th><th scope="col" class="tk-n">% of running</th></tr></thead><tbody data-draw="split" data-source="breakdown_cube" data-dim="incharge" data-cols="run_hours:2:,bd_machine:2:,bd_oven:2:,bd_mixing:2:,bd_packing:2:,bd_manpower:2:,bd_electricity:2:,bd_total:2:,bd_pct:2:"></tbody></table></div>
+  </article>
+</section>
+
+<!-- ================= GAS, POWER, MANPOWER ================= -->
+<section class="tk-page" id="utilities" hidden>
+  <p class="tk-note tk-lead">Red is above standard, green is at or below. Std is weighted by production when several entries are added up.</p>
+  <article class="tk-card tk-wide" id="gas">
+    <h2 class="tk-h">Gas</h2>
+    <div class="tk-tiles tk-tiles-in">
+      <div class="tk-tile"><div class="tk-lbl">Gas per MT</div><div class="tk-big"><span data-draw="kpi" data-pill data-source="gas_cube" data-field="per_mt" data-target="std">—</span></div><div class="tk-sub"><span class="tk-pill bad" hidden>Above std</span><span class="tk-pill ok" hidden>Within std</span></div></div>
+      <div class="tk-tile"><div class="tk-lbl">Std per MT</div><div class="tk-big"><span data-draw="kpi" data-source="gas_cube" data-field="std">—</span></div></div>
+      <div class="tk-tile"><div class="tk-lbl">vs std</div><div class="tk-big"><span data-draw="kpi" data-signed data-source="gas_cube" data-field="vs_std" data-target="@zero">—</span></div></div>
+      <div class="tk-tile"><div class="tk-lbl">Gas consumed</div><div class="tk-big"><span data-draw="kpi" data-source="gas_cube" data-field="gas">—</span></div><div class="tk-sub">for <span data-draw="kpi" data-source="gas_cube" data-field="prod_mt">—</span> MT</div></div>
+    </div>
+    <div class="tk-cf" role="group" aria-label="Chart filters"><label class="tk-cf-f"><span>From</span><input type="date" class="tk-cf-d" id="gas_day_from" data-p="gas_day_from" min="2000-01-01" max="2099-12-31"></label><label class="tk-cf-f"><span>To</span><input type="date" class="tk-cf-d" id="gas_day_to" data-p="gas_day_to" min="2000-01-01" max="2099-12-31"></label><label class="tk-cf-f"><span>Week</span><select id="gas_day_week" data-draw="copt" data-dim="week" data-p="gas_day_week" data-all="As top filter" data-source="sheet"></select></label><label class="tk-cf-f"><span>Shift</span><select id="gas_day_shift" data-draw="copt" data-dim="shift" data-p="gas_day_shift" data-all="As top filter" data-source="sheet"></select></label><label class="tk-cf-f"><span>SKU</span><select id="gas_day_sku" data-draw="copt" data-dim="sku" data-p="gas_day_sku" data-all="As top filter" data-source="sheet"></select></label><button type="button" class="tk-cf-clear" data-chart="gas_day">Clear</button></div>
+      <div class="tk-chart" data-chart="gas_day" data-draw="bars" data-source="gas_cube" data-fields="per_mt" data-target="std"></div>
+    <div class="tk-seg" role="group" aria-label="Break down by">
+<button type="button" class="tk-seg-b" data-seg-group="seg-gas_cube-1203" data-seg="date" aria-pressed="true">Day</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-gas_cube-1203" data-seg="week" aria-pressed="false">Week</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-gas_cube-1203" data-seg="month" aria-pressed="false">Month</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-gas_cube-1203" data-seg="shift" aria-pressed="false">Shift</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-gas_cube-1203" data-seg="sku" aria-pressed="false">SKU</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-gas_cube-1203" data-seg="incharge" aria-pressed="false">Incharge</button>
+</div>
+<div class="tk-tablebox" data-seg-panel="seg-gas_cube-1203" data-seg="date"><table class="tk-table"><thead><tr><th scope="col">Date</th><th scope="col" class="tk-n">Production MT</th><th scope="col" class="tk-n">Gas used</th><th scope="col" class="tk-n">Per MT</th><th scope="col" class="tk-n">Std</th><th scope="col" class="tk-n">vs std</th></tr></thead><tbody data-draw="split" data-source="gas_cube" data-dim="date" data-cols="prod_mt:2:,gas:2:,per_mt:2:std,std:2:,vs_std:2:@zero"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-gas_cube-1203" data-seg="week" hidden><table class="tk-table"><thead><tr><th scope="col">Week</th><th scope="col" class="tk-n">Production MT</th><th scope="col" class="tk-n">Gas used</th><th scope="col" class="tk-n">Per MT</th><th scope="col" class="tk-n">Std</th><th scope="col" class="tk-n">vs std</th></tr></thead><tbody data-draw="split" data-source="gas_cube" data-dim="week" data-cols="prod_mt:2:,gas:2:,per_mt:2:std,std:2:,vs_std:2:@zero"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-gas_cube-1203" data-seg="month" hidden><table class="tk-table"><thead><tr><th scope="col">Month</th><th scope="col" class="tk-n">Production MT</th><th scope="col" class="tk-n">Gas used</th><th scope="col" class="tk-n">Per MT</th><th scope="col" class="tk-n">Std</th><th scope="col" class="tk-n">vs std</th></tr></thead><tbody data-draw="split" data-source="gas_cube" data-dim="month" data-cols="prod_mt:2:,gas:2:,per_mt:2:std,std:2:,vs_std:2:@zero"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-gas_cube-1203" data-seg="shift" hidden><table class="tk-table"><thead><tr><th scope="col">Shift</th><th scope="col" class="tk-n">Production MT</th><th scope="col" class="tk-n">Gas used</th><th scope="col" class="tk-n">Per MT</th><th scope="col" class="tk-n">Std</th><th scope="col" class="tk-n">vs std</th></tr></thead><tbody data-draw="split" data-source="gas_cube" data-dim="shift" data-cols="prod_mt:2:,gas:2:,per_mt:2:std,std:2:,vs_std:2:@zero"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-gas_cube-1203" data-seg="sku" hidden><table class="tk-table"><thead><tr><th scope="col">SKU</th><th scope="col" class="tk-n">Production MT</th><th scope="col" class="tk-n">Gas used</th><th scope="col" class="tk-n">Per MT</th><th scope="col" class="tk-n">Std</th><th scope="col" class="tk-n">vs std</th></tr></thead><tbody data-draw="split" data-source="gas_cube" data-dim="sku" data-cols="prod_mt:2:,gas:2:,per_mt:2:std,std:2:,vs_std:2:@zero"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-gas_cube-1203" data-seg="incharge" hidden><table class="tk-table"><thead><tr><th scope="col">Incharge</th><th scope="col" class="tk-n">Production MT</th><th scope="col" class="tk-n">Gas used</th><th scope="col" class="tk-n">Per MT</th><th scope="col" class="tk-n">Std</th><th scope="col" class="tk-n">vs std</th></tr></thead><tbody data-draw="split" data-source="gas_cube" data-dim="incharge" data-cols="prod_mt:2:,gas:2:,per_mt:2:std,std:2:,vs_std:2:@zero"></tbody></table></div>
+  </article>
+  <article class="tk-card tk-wide" id="electricity">
+    <h2 class="tk-h">Electricity</h2>
+    <div class="tk-tiles tk-tiles-in">
+      <div class="tk-tile"><div class="tk-lbl">Units per MT</div><div class="tk-big"><span data-draw="kpi" data-pill data-source="elec_cube" data-field="per_mt" data-target="std">—</span></div><div class="tk-sub"><span class="tk-pill bad" hidden>Above std</span><span class="tk-pill ok" hidden>Within std</span></div></div>
+      <div class="tk-tile"><div class="tk-lbl">Std per MT</div><div class="tk-big"><span data-draw="kpi" data-source="elec_cube" data-field="std">—</span></div></div>
+      <div class="tk-tile"><div class="tk-lbl">vs std</div><div class="tk-big"><span data-draw="kpi" data-signed data-source="elec_cube" data-field="vs_std" data-target="@zero">—</span></div></div>
+      <div class="tk-tile"><div class="tk-lbl">Units consumed</div><div class="tk-big"><span data-draw="kpi" data-source="elec_cube" data-field="units">—</span></div><div class="tk-sub">for <span data-draw="kpi" data-source="elec_cube" data-field="prod_mt">—</span> MT</div></div>
+    </div>
+    <div class="tk-cf" role="group" aria-label="Chart filters"><label class="tk-cf-f"><span>From</span><input type="date" class="tk-cf-d" id="elec_day_from" data-p="elec_day_from" min="2000-01-01" max="2099-12-31"></label><label class="tk-cf-f"><span>To</span><input type="date" class="tk-cf-d" id="elec_day_to" data-p="elec_day_to" min="2000-01-01" max="2099-12-31"></label><label class="tk-cf-f"><span>Week</span><select id="elec_day_week" data-draw="copt" data-dim="week" data-p="elec_day_week" data-all="As top filter" data-source="sheet"></select></label><label class="tk-cf-f"><span>Shift</span><select id="elec_day_shift" data-draw="copt" data-dim="shift" data-p="elec_day_shift" data-all="As top filter" data-source="sheet"></select></label><label class="tk-cf-f"><span>SKU</span><select id="elec_day_sku" data-draw="copt" data-dim="sku" data-p="elec_day_sku" data-all="As top filter" data-source="sheet"></select></label><button type="button" class="tk-cf-clear" data-chart="elec_day">Clear</button></div>
+      <div class="tk-chart" data-chart="elec_day" data-draw="bars" data-source="elec_cube" data-fields="per_mt" data-target="std"></div>
+    <div class="tk-seg" role="group" aria-label="Break down by">
+<button type="button" class="tk-seg-b" data-seg-group="seg-elec_cube-7510" data-seg="date" aria-pressed="true">Day</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-elec_cube-7510" data-seg="week" aria-pressed="false">Week</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-elec_cube-7510" data-seg="month" aria-pressed="false">Month</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-elec_cube-7510" data-seg="shift" aria-pressed="false">Shift</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-elec_cube-7510" data-seg="sku" aria-pressed="false">SKU</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-elec_cube-7510" data-seg="incharge" aria-pressed="false">Incharge</button>
+</div>
+<div class="tk-tablebox" data-seg-panel="seg-elec_cube-7510" data-seg="date"><table class="tk-table"><thead><tr><th scope="col">Date</th><th scope="col" class="tk-n">Production MT</th><th scope="col" class="tk-n">Units used</th><th scope="col" class="tk-n">Per MT</th><th scope="col" class="tk-n">Std</th><th scope="col" class="tk-n">vs std</th></tr></thead><tbody data-draw="split" data-source="elec_cube" data-dim="date" data-cols="prod_mt:2:,units:2:,per_mt:2:std,std:2:,vs_std:2:@zero"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-elec_cube-7510" data-seg="week" hidden><table class="tk-table"><thead><tr><th scope="col">Week</th><th scope="col" class="tk-n">Production MT</th><th scope="col" class="tk-n">Units used</th><th scope="col" class="tk-n">Per MT</th><th scope="col" class="tk-n">Std</th><th scope="col" class="tk-n">vs std</th></tr></thead><tbody data-draw="split" data-source="elec_cube" data-dim="week" data-cols="prod_mt:2:,units:2:,per_mt:2:std,std:2:,vs_std:2:@zero"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-elec_cube-7510" data-seg="month" hidden><table class="tk-table"><thead><tr><th scope="col">Month</th><th scope="col" class="tk-n">Production MT</th><th scope="col" class="tk-n">Units used</th><th scope="col" class="tk-n">Per MT</th><th scope="col" class="tk-n">Std</th><th scope="col" class="tk-n">vs std</th></tr></thead><tbody data-draw="split" data-source="elec_cube" data-dim="month" data-cols="prod_mt:2:,units:2:,per_mt:2:std,std:2:,vs_std:2:@zero"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-elec_cube-7510" data-seg="shift" hidden><table class="tk-table"><thead><tr><th scope="col">Shift</th><th scope="col" class="tk-n">Production MT</th><th scope="col" class="tk-n">Units used</th><th scope="col" class="tk-n">Per MT</th><th scope="col" class="tk-n">Std</th><th scope="col" class="tk-n">vs std</th></tr></thead><tbody data-draw="split" data-source="elec_cube" data-dim="shift" data-cols="prod_mt:2:,units:2:,per_mt:2:std,std:2:,vs_std:2:@zero"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-elec_cube-7510" data-seg="sku" hidden><table class="tk-table"><thead><tr><th scope="col">SKU</th><th scope="col" class="tk-n">Production MT</th><th scope="col" class="tk-n">Units used</th><th scope="col" class="tk-n">Per MT</th><th scope="col" class="tk-n">Std</th><th scope="col" class="tk-n">vs std</th></tr></thead><tbody data-draw="split" data-source="elec_cube" data-dim="sku" data-cols="prod_mt:2:,units:2:,per_mt:2:std,std:2:,vs_std:2:@zero"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-elec_cube-7510" data-seg="incharge" hidden><table class="tk-table"><thead><tr><th scope="col">Incharge</th><th scope="col" class="tk-n">Production MT</th><th scope="col" class="tk-n">Units used</th><th scope="col" class="tk-n">Per MT</th><th scope="col" class="tk-n">Std</th><th scope="col" class="tk-n">vs std</th></tr></thead><tbody data-draw="split" data-source="elec_cube" data-dim="incharge" data-cols="prod_mt:2:,units:2:,per_mt:2:std,std:2:,vs_std:2:@zero"></tbody></table></div>
+  </article>
+  <article class="tk-card tk-wide" id="manpower">
+    <h2 class="tk-h">Manpower</h2>
+    <div class="tk-tiles tk-tiles-in">
+      <div class="tk-tile"><div class="tk-lbl">Cost per kg</div><div class="tk-big"><small>₹</small><span data-draw="kpi" data-pill data-source="manpower_cube" data-field="per_kg" data-target="std">—</span></div><div class="tk-sub"><span class="tk-pill bad" hidden>Above std</span><span class="tk-pill ok" hidden>Within std</span></div></div>
+      <div class="tk-tile"><div class="tk-lbl">Std per kg</div><div class="tk-big"><small>₹</small><span data-draw="kpi" data-source="manpower_cube" data-field="std">—</span></div></div>
+      <div class="tk-tile"><div class="tk-lbl">vs std</div><div class="tk-big"><span data-draw="kpi" data-signed data-source="manpower_cube" data-field="vs_std" data-target="@zero">—</span></div></div>
+      <div class="tk-tile"><div class="tk-lbl">Manpower cost</div><div class="tk-big"><small>₹</small><span data-draw="kpi" data-source="manpower_cube" data-field="cost" data-dec="0">—</span></div><div class="tk-sub"><span data-draw="kpi" data-source="manpower_cube" data-field="heads" data-dec="0">—</span> man-shifts</div></div>
+    </div>
+    <div class="tk-cf" role="group" aria-label="Chart filters"><label class="tk-cf-f"><span>From</span><input type="date" class="tk-cf-d" id="mp_day_from" data-p="mp_day_from" min="2000-01-01" max="2099-12-31"></label><label class="tk-cf-f"><span>To</span><input type="date" class="tk-cf-d" id="mp_day_to" data-p="mp_day_to" min="2000-01-01" max="2099-12-31"></label><label class="tk-cf-f"><span>Week</span><select id="mp_day_week" data-draw="copt" data-dim="week" data-p="mp_day_week" data-all="As top filter" data-source="sheet"></select></label><label class="tk-cf-f"><span>Shift</span><select id="mp_day_shift" data-draw="copt" data-dim="shift" data-p="mp_day_shift" data-all="As top filter" data-source="sheet"></select></label><label class="tk-cf-f"><span>SKU</span><select id="mp_day_sku" data-draw="copt" data-dim="sku" data-p="mp_day_sku" data-all="As top filter" data-source="sheet"></select></label><button type="button" class="tk-cf-clear" data-chart="mp_day">Clear</button></div>
+      <div class="tk-chart" data-chart="mp_day" data-draw="bars" data-source="manpower_cube" data-fields="per_kg" data-target="std" data-unit=" ₹/kg"></div>
+    <div class="tk-seg" role="group" aria-label="Break down by">
+<button type="button" class="tk-seg-b" data-seg-group="seg-manpower_cube-7860" data-seg="date" aria-pressed="true">Day</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-manpower_cube-7860" data-seg="week" aria-pressed="false">Week</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-manpower_cube-7860" data-seg="month" aria-pressed="false">Month</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-manpower_cube-7860" data-seg="shift" aria-pressed="false">Shift</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-manpower_cube-7860" data-seg="sku" aria-pressed="false">SKU</button>
+<button type="button" class="tk-seg-b" data-seg-group="seg-manpower_cube-7860" data-seg="incharge" aria-pressed="false">Incharge</button>
+</div>
+<div class="tk-tablebox" data-seg-panel="seg-manpower_cube-7860" data-seg="date"><table class="tk-table"><thead><tr><th scope="col">Date</th><th scope="col" class="tk-n">Production kg</th><th scope="col" class="tk-n">Manpower</th><th scope="col" class="tk-n">Cost ₹</th><th scope="col" class="tk-n">₹ per kg</th><th scope="col" class="tk-n">Std</th><th scope="col" class="tk-n">vs std</th></tr></thead><tbody data-draw="split" data-source="manpower_cube" data-dim="date" data-cols="prod_kg:0:,heads:0:,cost:0:,per_kg:2:std,std:2:,vs_std:2:@zero"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-manpower_cube-7860" data-seg="week" hidden><table class="tk-table"><thead><tr><th scope="col">Week</th><th scope="col" class="tk-n">Production kg</th><th scope="col" class="tk-n">Manpower</th><th scope="col" class="tk-n">Cost ₹</th><th scope="col" class="tk-n">₹ per kg</th><th scope="col" class="tk-n">Std</th><th scope="col" class="tk-n">vs std</th></tr></thead><tbody data-draw="split" data-source="manpower_cube" data-dim="week" data-cols="prod_kg:0:,heads:0:,cost:0:,per_kg:2:std,std:2:,vs_std:2:@zero"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-manpower_cube-7860" data-seg="month" hidden><table class="tk-table"><thead><tr><th scope="col">Month</th><th scope="col" class="tk-n">Production kg</th><th scope="col" class="tk-n">Manpower</th><th scope="col" class="tk-n">Cost ₹</th><th scope="col" class="tk-n">₹ per kg</th><th scope="col" class="tk-n">Std</th><th scope="col" class="tk-n">vs std</th></tr></thead><tbody data-draw="split" data-source="manpower_cube" data-dim="month" data-cols="prod_kg:0:,heads:0:,cost:0:,per_kg:2:std,std:2:,vs_std:2:@zero"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-manpower_cube-7860" data-seg="shift" hidden><table class="tk-table"><thead><tr><th scope="col">Shift</th><th scope="col" class="tk-n">Production kg</th><th scope="col" class="tk-n">Manpower</th><th scope="col" class="tk-n">Cost ₹</th><th scope="col" class="tk-n">₹ per kg</th><th scope="col" class="tk-n">Std</th><th scope="col" class="tk-n">vs std</th></tr></thead><tbody data-draw="split" data-source="manpower_cube" data-dim="shift" data-cols="prod_kg:0:,heads:0:,cost:0:,per_kg:2:std,std:2:,vs_std:2:@zero"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-manpower_cube-7860" data-seg="sku" hidden><table class="tk-table"><thead><tr><th scope="col">SKU</th><th scope="col" class="tk-n">Production kg</th><th scope="col" class="tk-n">Manpower</th><th scope="col" class="tk-n">Cost ₹</th><th scope="col" class="tk-n">₹ per kg</th><th scope="col" class="tk-n">Std</th><th scope="col" class="tk-n">vs std</th></tr></thead><tbody data-draw="split" data-source="manpower_cube" data-dim="sku" data-cols="prod_kg:0:,heads:0:,cost:0:,per_kg:2:std,std:2:,vs_std:2:@zero"></tbody></table></div>
+<div class="tk-tablebox" data-seg-panel="seg-manpower_cube-7860" data-seg="incharge" hidden><table class="tk-table"><thead><tr><th scope="col">Incharge</th><th scope="col" class="tk-n">Production kg</th><th scope="col" class="tk-n">Manpower</th><th scope="col" class="tk-n">Cost ₹</th><th scope="col" class="tk-n">₹ per kg</th><th scope="col" class="tk-n">Std</th><th scope="col" class="tk-n">vs std</th></tr></thead><tbody data-draw="split" data-source="manpower_cube" data-dim="incharge" data-cols="prod_kg:0:,heads:0:,cost:0:,per_kg:2:std,std:2:,vs_std:2:@zero"></tbody></table></div>
+  </article>
+</section>
+</div>
+</div>
+<script>
+// Stand-in for the dashboard runtime: loads the sheet straight from Google, runs the calculations and draws.
+window.dash = (() => {
+  const SHEET = '1IEtanPK4MOB6p-78izgyYXrTTQS-g3fhPDWIYFWQe9Y';
+  const SPEC = {"wrapper": {"gid": 937656199, "headers": 1, "fill": 0, "cols": ["date:date", "shift:text", "incharge:text", "sku:text", "w_std_per_kg:num", "w_prod:num", "w_std_cons:num", "w_allow_pct:num", "w_allow_kg:num", "w_std_allow:num", "w_actual:num", "w_var:num", "l_std_per_kg:num", "l_prod:num", "l_std_cons:num", "l_allow_pct:num", "l_allow_kg:num", "l_std_allow:num", "l_actual:num", "l_var:num", "s_std_per_kg:num", "s_prod:num", "s_std_cons:num", "s_allow_pct:num", "s_allow_kg:num", "s_std_allow:num", "s_actual:num", "s_var:num"]}, "broken": {"gid": 511671557, "headers": 1, "fill": 0, "cols": ["date:date", "shift:text", "incharge:text", "sku:text", "prod_kg:num", "broken_kg:num", "broken_pct_sheet:num"]}, "sweepage": {"gid": 1305844633, "headers": 1, "fill": 0, "cols": ["date:date", "shift:text", "incharge:text", "sku:text", "prod_kg:num", "dough:num", "dough_pct_sheet:num", "chura:num", "chura_pct_sheet:num", "floor:num", "floor_pct_sheet:num", "cream:num", "cream_pct_sheet:num", "maida:num", "maida_pct_sheet:num", "sugar:num", "sugar_pct_sheet:num"]}, "scrap": {"gid": 496672809, "headers": 1, "fill": 0, "cols": ["date:date", "shift:text", "incharge:text", "sku:text", "prod_kg:num", "core:num", "maida_bags:num", "sugar_bags:num", "jar:num", "chemical_bags:num", "drum:num", "bottle:num"]}, "rm": {"gid": 1985686140, "headers": 2, "fill": 5, "cols": ["date:date", "shift:text", "incharge:text", "sku:text", "batch:num", "rm:text", "bom:num", "actual:num", "variance_sheet:num"]}, "breakdown": {"gid": 423247726, "headers": 1, "fill": 0, "cols": ["date:date", "shift:text", "incharge:text", "sku:text", "start:text", "end:text", "run_hours:time", "bd_machine:num", "bd_oven:num", "bd_mixing:num", "bd_packing:num", "bd_manpower:num", "bd_electricity:num", "bd_total:num"]}, "gas": {"gid": 1099826035, "headers": 1, "fill": 0, "cols": ["date:date", "shift:text", "incharge:text", "sku:text", "prod_mt:num", "gas:num", "per_mt_sheet:num", "std:num", "var_sheet:num"]}, "electricity": {"gid": 1188450958, "headers": 1, "fill": 0, "cols": ["date:date", "shift:text", "incharge:text", "sku:text", "prod_mt:num", "units:num", "per_mt_sheet:num", "std:num", "var_sheet:num"]}, "manpower": {"gid": 1514741191, "headers": 1, "fill": 0, "cols": ["date:date", "shift:text", "incharge:text", "sku:text", "prod_kg:num", "heads:num", "cost_per_head:num", "cost_total:num", "per_kg_sheet:num", "std:num", "var_sheet:num"]}};
+  const DEFAULTS = { month: 'All', week: 'All', shift: 'All', sku: 'All', incharge: 'All' };
+  let params = { ...DEFAULTS };
+  const store = { sheet: { status: 'loading', data: [] } };
+  const calcs = {}, calcCache = {}, draws = {}, listeners = [];
+  let version = 0, queued = false;
+  const colors = ['#2c6fbb', '#e07b39', '#3a9e6a', '#8a5cc2', '#c9a227', '#c2507a', '#4aa3b8', '#7a7f8a'];
+  const num = (v) => { const s = String(v ?? '').replace(/[,%\s₹]/g, ''); if (s === '' || s === '-') return null; const n = Number(s); return Number.isFinite(n) ? n : null; };
+  const time = (v) => { const s = String(v ?? '').trim(); const m = s.match(/^(\d+):(\d{1,2})(?::(\d{1,2}))?$/); return m ? +m[1] + m[2] / 60 + (m[3] ? m[3] / 3600 : 0) : num(s); };
+  const pad = (n) => String(n).padStart(2, '0');
+  const date = (v) => {
+    const s = String(v ?? '').trim();
+    let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m) return m[1] + '-' + pad(m[2]) + '-' + pad(m[3]);
+    m = s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/);
+    if (!m) return null;
+    let mo = +m[1], d = +m[2];
+    if (mo > 12) [mo, d] = [d, mo];
+    return (m[3].length === 2 ? '20' + m[3] : m[3]) + '-' + pad(mo) + '-' + pad(d);
+  };
+  const text = (v) => { const s = String(v ?? '').trim(); return s || null; };
+  const CONV = { date, num, time, text };
+  async function fetchTab(sp) {
+    const url = `https://docs.google.com/spreadsheets/d/${SHEET}/gviz/tq?tqx=out:csv&gid=${sp.gid}&headers=${sp.headers}&_=${Date.now()}`;
+    const res = await fetch(url, { cache: 'no-store' });
+    const body = await res.text();
+    if (!res.ok || body.trim().startsWith('<')) throw new Error('The Production sheet could not be read. Check that it is shared as "Anyone with the link: Viewer".');
+    return d3.csvParseRows(body);
+  }
+  async function load() {
+    const btn = document.querySelector('.tk-reload'); if (btn) btn.disabled = true;
+    try {
+      const tabs = Object.entries(SPEC);
+      const all = await Promise.all(tabs.map(([, sp]) => fetchTab(sp)));
+      const rows = [];
+      tabs.forEach(([tab, sp], ti) => {
+        const cols = sp.cols.map((c) => c.split(':'));
+        let last = null;
+        for (const r of all[ti].slice(1)) {
+          const o = { tab };
+          cols.forEach(([k, t], i) => { o[k] = CONV[t](r[i]); });
+          if (sp.fill && last && !o.date && cols.slice(sp.fill).some(([k]) => o[k] != null)) {
+            for (let i = 0; i < sp.fill; i++) { const k = cols[i][0]; if (o[k] == null) o[k] = last[k]; }
+          }
+          if (!o.date) continue;
+          last = o; rows.push(o);
+        }
+      });
+      store.sheet = { status: 'ok', data: rows };
+      setUpdated(null);
+    } catch (e) {
+      if (store.sheet.status !== 'ok') store.sheet = { status: 'error', data: [], message: e.message };
+      setUpdated(e.message);
+    }
+    version++;
+    if (btn) btn.disabled = false;
+    render();
+  }
+  function setUpdated(err) {
+    document.querySelectorAll('.tk-upd').forEach((el) => {
+      el.classList.toggle('tk-err', !!err);
+      el.textContent = err ? err : 'Updated ' + new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }) + '.';
+    });
+  }
+  function data(id) {
+    if (store[id]) return store[id];
+    const c = calcs[id];
+    if (!c) return { status: 'missing', data: [] };
+    const ins = c.inputs.map((i) => data(i));
+    const bad = ins.find((d) => d.status !== 'ok');
+    if (bad) return { status: bad.status, data: [] };
+    if (!calcCache[id] || calcCache[id].v !== version) {
+      try { calcCache[id] = { v: version, d: { status: 'ok', data: c.fn(...ins.map((d) => d.data)) } }; }
+      catch (e) { console.error(e); calcCache[id] = { v: version, d: { status: 'error', data: [], message: String(e) } }; }
+    }
+    return calcCache[id].d;
+  }
+  function render() {
+    queued = false;
+    listeners.forEach((fn) => { try { fn(); } catch (e) { console.error(e); } });
+    for (const [name, fn] of Object.entries(draws)) {
+      document.querySelectorAll(`[data-draw="${name}"]`).forEach((el) => {
+        if (el.closest('[hidden]')) return;
+        try { fn(el); } catch (e) { console.error(name, e); }
+      });
+    }
+  }
+  const schedule = () => { if (!queued) { queued = true; requestAnimationFrame(render); } };
+  function start() {
+    const mo = new MutationObserver(schedule);
+    document.querySelectorAll('.tk-page, [data-seg-panel]').forEach((el) => mo.observe(el, { attributes: true, attributeFilter: ['hidden'] }));
+    let w = window.innerWidth;
+    window.addEventListener('resize', () => { if (Math.abs(window.innerWidth - w) > 20) { w = window.innerWidth; schedule(); } });
+    document.querySelectorAll('.tk-reload').forEach((b) => b.addEventListener('click', load));
+    render();
+    load();
+    setInterval(() => { if (!document.hidden) load(); }, 5 * 60 * 1000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
+  }
+  return {
+    colors, data,
+    calc: (id, o) => { calcs[id] = o; },
+    loader: () => {},
+    draw: (name, fn) => { draws[name] = fn; },
+    onData: (fn) => { listeners.push(fn); },
+    params: () => ({ ...params }),
+    setParams: (o) => { for (const [k, v] of Object.entries(o)) { if (v == null) delete params[k]; else params[k] = v; } schedule(); },
+    resetParams: () => { params = { ...DEFAULTS }; schedule(); },
+    setLink: (name) => { try { history.replaceState(null, '', '#' + name); } catch (e) {} },
+    refresh: () => load(),
+    start,
+  };
+})();
+</script>
+<script>
+
+dash.calc('wrapper_cube', { inputs: ['sheet'], title: "Wrapper wastage worked out", description: "Wastage % = (actual use \u2212 standard use) \u00f7 standard use; allowed % and excess kg over the allowed quantity, for wrapper, laddi and shrink.", fn: (sheet) => {
+  // Adds up each entry into every combination of day / week / month / all-time and
+  // week / each filter (shift, SKU, incharge), with "All" meaning no filter.
+  const DIMS = ["shift", "sku", "incharge"];
+  const r2 = (v, d = 2) => (v == null || !Number.isFinite(v) ? null : Math.round(v * 10 ** d) / 10 ** d);
+  const pct = (a, b, d = 2) => (b ? r2((a / b) * 100, d) : null);
+  const pre = (r) => {
+    const o = {};
+    for (const p of ['w', 'l', 's']) {
+      const std = r[p + '_std_cons'] ?? (r[p + '_std_per_kg'] != null && r[p + '_prod'] != null ? r[p + '_std_per_kg'] * r[p + '_prod'] : null);
+      const act = r[p + '_actual'];
+      if (std == null || act == null) continue;
+      o[p + '_std'] = std; o[p + '_act'] = act; o[p + '_allow'] = r[p + '_std_allow'] ?? std;
+    }
+    return o;
+  };
+  const post = (s) => {
+    const o = {};
+    for (const p of ['w', 'l', 's']) {
+      const std = s[p + '_std'], act = s[p + '_act'], allow = s[p + '_allow'];
+      o[p + '_std_kg'] = r2(std);
+      o[p + '_actual_kg'] = r2(act);
+      o[p + '_waste_pct'] = std ? pct(act - std, std) : null;
+      o[p + '_allow_pct'] = std ? pct(allow - std, std) : null;
+      o[p + '_excess_kg'] = std ? r2(act - allow) : null;
+    }
+    return o;
+  };
+  // ISO week of a YYYY-MM-DD day, as YYYY-Www (weeks start Monday).
+  const isoWeek = (day) => {
+    const t = new Date(day + 'T00:00:00Z');
+    t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7) + 3);
+    const y = t.getUTCFullYear(), jan4 = new Date(Date.UTC(y, 0, 4));
+    const w = 1 + Math.round(((t - jan4) / 864e5 - 3 + ((jan4.getUTCDay() + 6) % 7)) / 7);
+    return y + '-W' + String(w).padStart(2, '0');
+  };
+  const groups = new Map();
+  for (const r of sheet) {
+    if (r.tab !== 'wrapper' || !r.date) continue;
+    const v = pre(r);
+    let combos = [{ period: r.date }, { period: isoWeek(r.date) }, { period: r.date.slice(0, 7) }, { period: 'All' }];
+    for (const d of DIMS) combos = combos.flatMap((c) => [{ ...c, [d]: r[d] ?? '(blank)' }, { ...c, [d]: 'All' }]);
+    for (const c of combos) {
+      const k = DIMS.map((d) => c[d]).concat(c.period).join('|');
+      let g = groups.get(k);
+      if (!g) groups.set(k, (g = { dims: c, s: {} }));
+      for (const f in v) if (v[f] != null) g.s[f] = (g.s[f] || 0) + v[f];
+    }
+  }
+  return [...groups.values()].map((g) => ({ ...g.dims, ...post(g.s) }));
+} });
+dash.calc('broken_cube', { inputs: ['sheet'], title: "Broken % worked out", description: "Broken % = broken kg \u00f7 production kg.", fn: (sheet) => {
+  // Adds up each entry into every combination of day / week / month / all-time and
+  // week / each filter (shift, SKU, incharge), with "All" meaning no filter.
+  const DIMS = ["shift", "sku", "incharge"];
+  const r2 = (v, d = 2) => (v == null || !Number.isFinite(v) ? null : Math.round(v * 10 ** d) / 10 ** d);
+  const pct = (a, b, d = 2) => (b ? r2((a / b) * 100, d) : null);
+  const pre = (r) => (r.prod_kg != null && r.broken_kg != null ? { prod: r.prod_kg, broken: r.broken_kg } : {});
+  const post = (s) => ({ prod_kg: r2(s.prod, 0), broken_kg: r2(s.broken), broken_pct: s.prod ? pct(s.broken, s.prod) : null });
+  // ISO week of a YYYY-MM-DD day, as YYYY-Www (weeks start Monday).
+  const isoWeek = (day) => {
+    const t = new Date(day + 'T00:00:00Z');
+    t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7) + 3);
+    const y = t.getUTCFullYear(), jan4 = new Date(Date.UTC(y, 0, 4));
+    const w = 1 + Math.round(((t - jan4) / 864e5 - 3 + ((jan4.getUTCDay() + 6) % 7)) / 7);
+    return y + '-W' + String(w).padStart(2, '0');
+  };
+  const groups = new Map();
+  for (const r of sheet) {
+    if (r.tab !== 'broken' || !r.date) continue;
+    const v = pre(r);
+    let combos = [{ period: r.date }, { period: isoWeek(r.date) }, { period: r.date.slice(0, 7) }, { period: 'All' }];
+    for (const d of DIMS) combos = combos.flatMap((c) => [{ ...c, [d]: r[d] ?? '(blank)' }, { ...c, [d]: 'All' }]);
+    for (const c of combos) {
+      const k = DIMS.map((d) => c[d]).concat(c.period).join('|');
+      let g = groups.get(k);
+      if (!g) groups.set(k, (g = { dims: c, s: {} }));
+      for (const f in v) if (v[f] != null) g.s[f] = (g.s[f] || 0) + v[f];
+    }
+  }
+  return [...groups.values()].map((g) => ({ ...g.dims, ...post(g.s) }));
+} });
+dash.calc('sweep_cube', { inputs: ['sheet'], title: "Sweepage % worked out", description: "Each sweepage item and the total as kg and as % of production kg.", fn: (sheet) => {
+  // Adds up each entry into every combination of day / week / month / all-time and
+  // week / each filter (shift, SKU, incharge), with "All" meaning no filter.
+  const DIMS = ["shift", "sku", "incharge"];
+  const r2 = (v, d = 2) => (v == null || !Number.isFinite(v) ? null : Math.round(v * 10 ** d) / 10 ** d);
+  const pct = (a, b, d = 2) => (b ? r2((a / b) * 100, d) : null);
+  const pre = (r) => {
+    if (r.prod_kg == null) return {};
+    const o = { prod: r.prod_kg };
+    for (const i of ['dough', 'chura', 'floor', 'cream', 'maida', 'sugar']) o[i] = r[i] ?? 0;
+    return o;
+  };
+  const post = (s) => {
+    const o = { prod_kg: r2(s.prod, 0) };
+    let t = 0;
+    for (const i of ['dough', 'chura', 'floor', 'cream', 'maida', 'sugar']) {
+      t += s[i] || 0;
+      o[i + '_kg'] = r2(s[i]);
+      o[i + '_pct'] = s.prod ? pct(s[i] || 0, s.prod, 3) : null;
+    }
+    o.total_kg = r2(t);
+    o.total_pct = s.prod ? pct(t, s.prod, 3) : null;
+    return o;
+  };
+  // ISO week of a YYYY-MM-DD day, as YYYY-Www (weeks start Monday).
+  const isoWeek = (day) => {
+    const t = new Date(day + 'T00:00:00Z');
+    t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7) + 3);
+    const y = t.getUTCFullYear(), jan4 = new Date(Date.UTC(y, 0, 4));
+    const w = 1 + Math.round(((t - jan4) / 864e5 - 3 + ((jan4.getUTCDay() + 6) % 7)) / 7);
+    return y + '-W' + String(w).padStart(2, '0');
+  };
+  const groups = new Map();
+  for (const r of sheet) {
+    if (r.tab !== 'sweepage' || !r.date) continue;
+    const v = pre(r);
+    let combos = [{ period: r.date }, { period: isoWeek(r.date) }, { period: r.date.slice(0, 7) }, { period: 'All' }];
+    for (const d of DIMS) combos = combos.flatMap((c) => [{ ...c, [d]: r[d] ?? '(blank)' }, { ...c, [d]: 'All' }]);
+    for (const c of combos) {
+      const k = DIMS.map((d) => c[d]).concat(c.period).join('|');
+      let g = groups.get(k);
+      if (!g) groups.set(k, (g = { dims: c, s: {} }));
+      for (const f in v) if (v[f] != null) g.s[f] = (g.s[f] || 0) + v[f];
+    }
+  }
+  return [...groups.values()].map((g) => ({ ...g.dims, ...post(g.s) }));
+} });
+dash.calc('scrap_cube', { inputs: ['sheet'], title: "Scrap totals", description: "Scrap items added up for the period and filters chosen.", fn: (sheet) => {
+  // Adds up each entry into every combination of day / week / month / all-time and
+  // week / each filter (shift, SKU, incharge), with "All" meaning no filter.
+  const DIMS = ["shift", "sku", "incharge"];
+  const r2 = (v, d = 2) => (v == null || !Number.isFinite(v) ? null : Math.round(v * 10 ** d) / 10 ** d);
+  const pct = (a, b, d = 2) => (b ? r2((a / b) * 100, d) : null);
+  const pre = (r) => {
+    const o = {};
+    for (const i of ['core', 'maida_bags', 'sugar_bags', 'jar', 'chemical_bags', 'drum', 'bottle']) o[i] = r[i] ?? 0;
+    return o;
+  };
+  const post = (s) => {
+    const o = {};
+    for (const i of ['core', 'maida_bags', 'sugar_bags', 'jar', 'chemical_bags', 'drum', 'bottle']) o[i] = r2(s[i] || 0);
+    return o;
+  };
+  // ISO week of a YYYY-MM-DD day, as YYYY-Www (weeks start Monday).
+  const isoWeek = (day) => {
+    const t = new Date(day + 'T00:00:00Z');
+    t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7) + 3);
+    const y = t.getUTCFullYear(), jan4 = new Date(Date.UTC(y, 0, 4));
+    const w = 1 + Math.round(((t - jan4) / 864e5 - 3 + ((jan4.getUTCDay() + 6) % 7)) / 7);
+    return y + '-W' + String(w).padStart(2, '0');
+  };
+  const groups = new Map();
+  for (const r of sheet) {
+    if (r.tab !== 'scrap' || !r.date) continue;
+    const v = pre(r);
+    let combos = [{ period: r.date }, { period: isoWeek(r.date) }, { period: r.date.slice(0, 7) }, { period: 'All' }];
+    for (const d of DIMS) combos = combos.flatMap((c) => [{ ...c, [d]: r[d] ?? '(blank)' }, { ...c, [d]: 'All' }]);
+    for (const c of combos) {
+      const k = DIMS.map((d) => c[d]).concat(c.period).join('|');
+      let g = groups.get(k);
+      if (!g) groups.set(k, (g = { dims: c, s: {} }));
+      for (const f in v) if (v[f] != null) g.s[f] = (g.s[f] || 0) + v[f];
+    }
+  }
+  return [...groups.values()].map((g) => ({ ...g.dims, ...post(g.s) }));
+} });
+dash.calc('rm_cube', { inputs: ['sheet'], title: "RM variance worked out", description: "Raw material used vs BOM: excess = actual \u2212 BOM (above zero means more than BOM), and excess as % of BOM.", fn: (sheet) => {
+  // Adds up each entry into every combination of day / week / month / all-time and
+  // week / each filter (shift, SKU, incharge, raw material), with "All" meaning no filter.
+  const DIMS = ["shift", "sku", "incharge", "rm"];
+  const r2 = (v, d = 2) => (v == null || !Number.isFinite(v) ? null : Math.round(v * 10 ** d) / 10 ** d);
+  const pct = (a, b, d = 2) => (b ? r2((a / b) * 100, d) : null);
+  const pre = (r) => (r.bom != null && r.actual != null ? { bom: r.bom, actual: r.actual } : {});
+  const post = (s) => ({ bom: r2(s.bom, 3), actual: r2(s.actual, 3), excess: s.bom != null ? r2(s.actual - s.bom, 3) : null, excess_pct: s.bom ? pct(s.actual - s.bom, s.bom) : null });
+  // ISO week of a YYYY-MM-DD day, as YYYY-Www (weeks start Monday).
+  const isoWeek = (day) => {
+    const t = new Date(day + 'T00:00:00Z');
+    t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7) + 3);
+    const y = t.getUTCFullYear(), jan4 = new Date(Date.UTC(y, 0, 4));
+    const w = 1 + Math.round(((t - jan4) / 864e5 - 3 + ((jan4.getUTCDay() + 6) % 7)) / 7);
+    return y + '-W' + String(w).padStart(2, '0');
+  };
+  const groups = new Map();
+  for (const r of sheet) {
+    if (r.tab !== 'rm' || !r.date) continue;
+    const v = pre(r);
+    let combos = [{ period: r.date }, { period: isoWeek(r.date) }, { period: r.date.slice(0, 7) }, { period: 'All' }];
+    for (const d of DIMS) combos = combos.flatMap((c) => [{ ...c, [d]: r[d] ?? '(blank)' }, { ...c, [d]: 'All' }]);
+    for (const c of combos) {
+      const k = DIMS.map((d) => c[d]).concat(c.period).join('|');
+      let g = groups.get(k);
+      if (!g) groups.set(k, (g = { dims: c, s: {} }));
+      for (const f in v) if (v[f] != null) g.s[f] = (g.s[f] || 0) + v[f];
+    }
+  }
+  return [...groups.values()].map((g) => ({ ...g.dims, ...post(g.s) }));
+} });
+dash.calc('breakdown_cube', { inputs: ['sheet'], title: "Breakdown hours worked out", description: "Breakdown hours by cause, their total, and total breakdown as % of running hours.", fn: (sheet) => {
+  // Adds up each entry into every combination of day / week / month / all-time and
+  // week / each filter (shift, SKU, incharge), with "All" meaning no filter.
+  const DIMS = ["shift", "sku", "incharge"];
+  const r2 = (v, d = 2) => (v == null || !Number.isFinite(v) ? null : Math.round(v * 10 ** d) / 10 ** d);
+  const pct = (a, b, d = 2) => (b ? r2((a / b) * 100, d) : null);
+  const pre = (r) => {
+    const cats = ['bd_machine', 'bd_oven', 'bd_mixing', 'bd_packing', 'bd_manpower', 'bd_electricity'];
+    const o = { run: r.run_hours ?? 0 };
+    for (const c of cats) o[c] = r[c] ?? 0;
+    o.total = r.bd_total ?? cats.reduce((a, c) => a + (r[c] ?? 0), 0);
+    return o;
+  };
+  const post = (s) => {
+    const o = { run_hours: r2(s.run) };
+    for (const c of ['bd_machine', 'bd_oven', 'bd_mixing', 'bd_packing', 'bd_manpower', 'bd_electricity']) o[c] = r2(s[c] || 0);
+    o.bd_total = r2(s.total || 0);
+    o.bd_pct = s.run ? pct(s.total || 0, s.run) : null;
+    return o;
+  };
+  // ISO week of a YYYY-MM-DD day, as YYYY-Www (weeks start Monday).
+  const isoWeek = (day) => {
+    const t = new Date(day + 'T00:00:00Z');
+    t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7) + 3);
+    const y = t.getUTCFullYear(), jan4 = new Date(Date.UTC(y, 0, 4));
+    const w = 1 + Math.round(((t - jan4) / 864e5 - 3 + ((jan4.getUTCDay() + 6) % 7)) / 7);
+    return y + '-W' + String(w).padStart(2, '0');
+  };
+  const groups = new Map();
+  for (const r of sheet) {
+    if (r.tab !== 'breakdown' || !r.date) continue;
+    const v = pre(r);
+    let combos = [{ period: r.date }, { period: isoWeek(r.date) }, { period: r.date.slice(0, 7) }, { period: 'All' }];
+    for (const d of DIMS) combos = combos.flatMap((c) => [{ ...c, [d]: r[d] ?? '(blank)' }, { ...c, [d]: 'All' }]);
+    for (const c of combos) {
+      const k = DIMS.map((d) => c[d]).concat(c.period).join('|');
+      let g = groups.get(k);
+      if (!g) groups.set(k, (g = { dims: c, s: {} }));
+      for (const f in v) if (v[f] != null) g.s[f] = (g.s[f] || 0) + v[f];
+    }
+  }
+  return [...groups.values()].map((g) => ({ ...g.dims, ...post(g.s) }));
+} });
+dash.calc('gas_cube', { inputs: ['sheet'], title: "Gas per MT vs std", description: "Gas per MT = gas consumed \u00f7 production MT; std is the standard weighted by MT; vs std = per MT \u2212 std (above zero is over standard).", fn: (sheet) => {
+  // Adds up each entry into every combination of day / week / month / all-time and
+  // week / each filter (shift, SKU, incharge), with "All" meaning no filter.
+  const DIMS = ["shift", "sku", "incharge"];
+  const r2 = (v, d = 2) => (v == null || !Number.isFinite(v) ? null : Math.round(v * 10 ** d) / 10 ** d);
+  const pct = (a, b, d = 2) => (b ? r2((a / b) * 100, d) : null);
+  const pre = (r) => (r.prod_mt && r.gas != null ? { mt: r.prod_mt, use: r.gas, stdw: r.std != null ? r.std * r.prod_mt : null, stdmt: r.std != null ? r.prod_mt : null } : {});
+  const post = (s) => ({ prod_mt: r2(s.mt), gas: r2(s.use), per_mt: s.mt ? r2(s.use / s.mt) : null, std: s.stdmt ? r2(s.stdw / s.stdmt) : null, vs_std: s.mt && s.stdmt ? r2(s.use / s.mt - s.stdw / s.stdmt) : null });
+  // ISO week of a YYYY-MM-DD day, as YYYY-Www (weeks start Monday).
+  const isoWeek = (day) => {
+    const t = new Date(day + 'T00:00:00Z');
+    t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7) + 3);
+    const y = t.getUTCFullYear(), jan4 = new Date(Date.UTC(y, 0, 4));
+    const w = 1 + Math.round(((t - jan4) / 864e5 - 3 + ((jan4.getUTCDay() + 6) % 7)) / 7);
+    return y + '-W' + String(w).padStart(2, '0');
+  };
+  const groups = new Map();
+  for (const r of sheet) {
+    if (r.tab !== 'gas' || !r.date) continue;
+    const v = pre(r);
+    let combos = [{ period: r.date }, { period: isoWeek(r.date) }, { period: r.date.slice(0, 7) }, { period: 'All' }];
+    for (const d of DIMS) combos = combos.flatMap((c) => [{ ...c, [d]: r[d] ?? '(blank)' }, { ...c, [d]: 'All' }]);
+    for (const c of combos) {
+      const k = DIMS.map((d) => c[d]).concat(c.period).join('|');
+      let g = groups.get(k);
+      if (!g) groups.set(k, (g = { dims: c, s: {} }));
+      for (const f in v) if (v[f] != null) g.s[f] = (g.s[f] || 0) + v[f];
+    }
+  }
+  return [...groups.values()].map((g) => ({ ...g.dims, ...post(g.s) }));
+} });
+dash.calc('elec_cube', { inputs: ['sheet'], title: "Electricity per MT vs std", description: "Units per MT = electricity units \u00f7 production MT; std is the standard weighted by MT; vs std = per MT \u2212 std (above zero is over standard).", fn: (sheet) => {
+  // Adds up each entry into every combination of day / week / month / all-time and
+  // week / each filter (shift, SKU, incharge), with "All" meaning no filter.
+  const DIMS = ["shift", "sku", "incharge"];
+  const r2 = (v, d = 2) => (v == null || !Number.isFinite(v) ? null : Math.round(v * 10 ** d) / 10 ** d);
+  const pct = (a, b, d = 2) => (b ? r2((a / b) * 100, d) : null);
+  const pre = (r) => (r.prod_mt && r.units != null ? { mt: r.prod_mt, use: r.units, stdw: r.std != null ? r.std * r.prod_mt : null, stdmt: r.std != null ? r.prod_mt : null } : {});
+  const post = (s) => ({ prod_mt: r2(s.mt), units: r2(s.use), per_mt: s.mt ? r2(s.use / s.mt) : null, std: s.stdmt ? r2(s.stdw / s.stdmt) : null, vs_std: s.mt && s.stdmt ? r2(s.use / s.mt - s.stdw / s.stdmt) : null });
+  // ISO week of a YYYY-MM-DD day, as YYYY-Www (weeks start Monday).
+  const isoWeek = (day) => {
+    const t = new Date(day + 'T00:00:00Z');
+    t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7) + 3);
+    const y = t.getUTCFullYear(), jan4 = new Date(Date.UTC(y, 0, 4));
+    const w = 1 + Math.round(((t - jan4) / 864e5 - 3 + ((jan4.getUTCDay() + 6) % 7)) / 7);
+    return y + '-W' + String(w).padStart(2, '0');
+  };
+  const groups = new Map();
+  for (const r of sheet) {
+    if (r.tab !== 'electricity' || !r.date) continue;
+    const v = pre(r);
+    let combos = [{ period: r.date }, { period: isoWeek(r.date) }, { period: r.date.slice(0, 7) }, { period: 'All' }];
+    for (const d of DIMS) combos = combos.flatMap((c) => [{ ...c, [d]: r[d] ?? '(blank)' }, { ...c, [d]: 'All' }]);
+    for (const c of combos) {
+      const k = DIMS.map((d) => c[d]).concat(c.period).join('|');
+      let g = groups.get(k);
+      if (!g) groups.set(k, (g = { dims: c, s: {} }));
+      for (const f in v) if (v[f] != null) g.s[f] = (g.s[f] || 0) + v[f];
+    }
+  }
+  return [...groups.values()].map((g) => ({ ...g.dims, ...post(g.s) }));
+} });
+dash.calc('manpower_cube', { inputs: ['sheet'], title: "Manpower cost per kg vs std", description: "Cost per kg = total manpower cost \u00f7 production kg; std weighted by kg; vs std = cost per kg \u2212 std (above zero is over standard).", fn: (sheet) => {
+  // Adds up each entry into every combination of day / week / month / all-time and
+  // week / each filter (shift, SKU, incharge), with "All" meaning no filter.
+  const DIMS = ["shift", "sku", "incharge"];
+  const r2 = (v, d = 2) => (v == null || !Number.isFinite(v) ? null : Math.round(v * 10 ** d) / 10 ** d);
+  const pct = (a, b, d = 2) => (b ? r2((a / b) * 100, d) : null);
+  const pre = (r) => {
+    const cost = r.cost_total ?? (r.heads != null && r.cost_per_head != null ? r.heads * r.cost_per_head : null);
+    if (!r.prod_kg || cost == null) return {};
+    return { kg: r.prod_kg, heads: r.heads ?? 0, cost, stdw: r.std != null ? r.std * r.prod_kg : null, stdkg: r.std != null ? r.prod_kg : null };
+  };
+  const post = (s) => ({ prod_kg: r2(s.kg, 0), heads: r2(s.heads, 0), cost: r2(s.cost, 0), per_kg: s.kg ? r2(s.cost / s.kg) : null, std: s.stdkg ? r2(s.stdw / s.stdkg) : null, vs_std: s.kg && s.stdkg ? r2(s.cost / s.kg - s.stdw / s.stdkg) : null });
+  // ISO week of a YYYY-MM-DD day, as YYYY-Www (weeks start Monday).
+  const isoWeek = (day) => {
+    const t = new Date(day + 'T00:00:00Z');
+    t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7) + 3);
+    const y = t.getUTCFullYear(), jan4 = new Date(Date.UTC(y, 0, 4));
+    const w = 1 + Math.round(((t - jan4) / 864e5 - 3 + ((jan4.getUTCDay() + 6) % 7)) / 7);
+    return y + '-W' + String(w).padStart(2, '0');
+  };
+  const groups = new Map();
+  for (const r of sheet) {
+    if (r.tab !== 'manpower' || !r.date) continue;
+    const v = pre(r);
+    let combos = [{ period: r.date }, { period: isoWeek(r.date) }, { period: r.date.slice(0, 7) }, { period: 'All' }];
+    for (const d of DIMS) combos = combos.flatMap((c) => [{ ...c, [d]: r[d] ?? '(blank)' }, { ...c, [d]: 'All' }]);
+    for (const c of combos) {
+      const k = DIMS.map((d) => c[d]).concat(c.period).join('|');
+      let g = groups.get(k);
+      if (!g) groups.set(k, (g = { dims: c, s: {} }));
+      for (const f in v) if (v[f] != null) g.s[f] = (g.s[f] || 0) + v[f];
+    }
+  }
+  return [...groups.values()].map((g) => ({ ...g.dims, ...post(g.s) }));
+} });
+
+</script>
+<script>
+
+window.TK = (() => {
+  // Fixed limits chosen for this plant (from the sheet's own headers).
+  const LIMITS = { broken: 3, sweep: 0.02, zero: 0 };
+  const RAW = ['sheet'];
+  const DIMS = ['shift', 'sku', 'incharge', 'rm'];
+  const idx = new WeakMap();
+
+  const isoWeek = (day) => {
+    const t = new Date(day + 'T00:00:00Z');
+    t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7) + 3);
+    const y = t.getUTCFullYear(), jan4 = new Date(Date.UTC(y, 0, 4));
+    const w = 1 + Math.round(((t - jan4) / 864e5 - 3 + ((jan4.getUTCDay() + 6) % 7)) / 7);
+    return y + '-W' + String(w).padStart(2, '0');
+  };
+  // First and last day (YYYY-MM-DD) of an ISO week YYYY-Www
+  const weekDays = (wk) => {
+    const y = +wk.slice(0, 4), w = +wk.slice(6);
+    const jan4 = new Date(Date.UTC(y, 0, 4));
+    const mon = new Date(jan4.getTime() + (-((jan4.getUTCDay() + 6) % 7) + (w - 1) * 7) * 864e5);
+    const sun = new Date(mon.getTime() + 6 * 864e5);
+    return [mon.toISOString().slice(0, 10), sun.toISOString().slice(0, 10)];
+  };
+  const status = (id) => dash.data(id).status;
+  const rowsOf = (id) => {
+    const d = dash.data(id);
+    if (d.status !== 'ok') return null;
+    const x = d.data;
+    return Array.isArray(x) ? x : (x && Array.isArray(x.rows) ? x.rows : []);
+  };
+  const keyOf = (o) => [o.period, o.shift, o.sku, o.incharge, o.rm ?? ''].join('|');
+  const sel = () => {
+    const p = dash.params();
+    return { period: p.week && p.week !== 'All' ? p.week : p.month || 'All', shift: p.shift || 'All', sku: p.sku || 'All', incharge: p.incharge || 'All' };
+  };
+  const extra = (el) => {
+    const o = {};
+    (el.dataset.extra || '').split('&').filter(Boolean).forEach((kv) => { const [k, v] = kv.split('='); o[k] = v; });
+    return o;
+  };
+  const get = (id, ex = {}) => {
+    const all = rowsOf(id);
+    if (!all) return null;
+    let m = idx.get(all);
+    if (!m) { m = new Map(); for (const r of all) m.set(keyOf(r), r); idx.set(all, m); }
+    const s = { ...sel(), ...ex };
+    if (s.week) s.period = s.week;
+    return m.get(keyOf(s)) || null;
+  };
+  // Rows for one breakdown: dim is date | month | shift | sku | incharge | rm.
+  const splitRows = (id, dim, ex = {}) => {
+    const all = rowsOf(id);
+    if (!all) return null;
+    const s = { ...sel(), ...ex };
+    if (s.week) s.period = s.week;
+    const isWk = s.period.length === 8;
+    const wk = isWk ? weekDays(s.period) : null;
+    // the days a row covers, for overlap tests
+    const span = (p) => (p.length === 10 ? [p, p] : p.length === 8 ? weekDays(p) : [p + '-01', p + '-31']);
+    const inSel = (p) => {
+      const [a, b] = span(p);
+      if (s.from && b < s.from) return false;
+      if (s.to && a > s.to) return false;
+      if (s.from || s.to) return true;
+      if (s.period === 'All') return true;
+      const [c, d] = span(s.period);
+      return !(b < c || a > d);
+    };
+    const out = all.filter((r) => {
+      if (dim === 'date') {
+        if (r.period.length !== 10) return false;
+        if (s.from || s.to) { if (!inSel(r.period)) return false; }
+        else if (isWk) { if (r.period < wk[0] || r.period > wk[1]) return false; }
+        else if (s.period !== 'All' && !r.period.startsWith(s.period)) return false;
+      } else if (dim === 'week') {
+        if (r.period.length !== 8 || !inSel(r.period)) return false;
+      } else if (dim === 'month') {
+        if (r.period.length !== 7) return false;
+        if (s.from && r.period < s.from.slice(0, 7)) return false;
+        if (s.to && r.period > s.to.slice(0, 7)) return false;
+        if (s.week && (r.period < wk[0].slice(0, 7) || r.period > wk[1].slice(0, 7))) return false;
+      } else if (r.period !== s.period) return false;
+      for (const d of DIMS) {
+        if (r[d] === undefined) continue;
+        if (d === dim) { if (r[d] === 'All') return false; } else if (r[d] !== (s[d] ?? 'All')) return false;
+      }
+      return true;
+    });
+    const timeDim = dim === 'date' || dim === 'month' || dim === 'week';
+    return out.sort((a, b) => (timeDim ? (a.period < b.period ? -1 : 1) : String(a[dim]).localeCompare(String(b[dim]))));
+  };
+  const fmt = (v, d = 2) => (v == null || !Number.isFinite(+v) ? '—' : (+v).toLocaleString('en-IN', { minimumFractionDigits: d, maximumFractionDigits: d }));
+  const where = (r) => ['period', 'shift', 'sku', 'incharge', 'rm'].filter((k) => r[k] != null).map((k) => k + '=' + encodeURIComponent(r[k])).join('&');
+  const mark = (id, field, r, dec) => {
+    const s = document.createElement('span');
+    s.dataset.source = id;
+    s.dataset.field = field;
+    s.dataset.where = where(r);
+    s.textContent = fmt(r[field], dec);
+    return s;
+  };
+  const tgtOf = (spec, r) => {
+    if (!spec) return null;
+    if (spec[0] === '@') return LIMITS[spec.slice(1)];
+    return r ? r[spec] ?? null : null;
+  };
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const dayLabel = (p) => +p.slice(8, 10) + ' ' + MON[+p.slice(5, 7) - 1];
+  const monthLabel = (p) => MON[+p.slice(5, 7) - 1] + ' ' + p.slice(0, 4);
+  const weekLabel = (wk) => { const [a, b] = weekDays(wk); return 'Wk ' + +wk.slice(6) + ' · ' + dayLabel(a) + ' – ' + dayLabel(b); };
+  const label = (dim, r) => (dim === 'date' ? dayLabel(r.period) + ' ' + r.period.slice(0, 4) : dim === 'month' ? monthLabel(r.period) : dim === 'week' ? weekLabel(r.period) : r[dim]);
+
+  const waiting = (el, st) => {
+    el.replaceChildren();
+    el.classList.toggle('dash-skeleton', st === 'loading');
+    if (st === 'error') {
+      const p = document.createElement('div');
+      p.className = 'tk-fail';
+      const dot = document.createElement('i');
+      p.append(dot, 'Failed to load');
+      el.append(p);
+    }
+  };
+  const empty = (el, text) => {
+    const p = document.createElement('div');
+    p.className = 'tk-empty';
+    p.textContent = text;
+    el.append(p);
+  };
+
+  // One chart: kind bars | lines | stack, over periods.
+  const chart = (el, o) => {
+    el.replaceChildren();
+    el.classList.remove('dash-skeleton');
+    const rows = o.rows;
+    if (!rows.length) return empty(el, 'No entries for this selection');
+    const W = Math.max(260, el.clientWidth || 600), H = 230, top = 12, bottom = 26;
+    const svg = d3.select(el).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`).attr('class', 'tk-svg');
+    const xl = o.grain === 'month' ? monthLabel : dayLabel;
+    const vals = [];
+    rows.forEach((r) => {
+      if (o.kind === 'stack') vals.push(d3.sum(o.series, (s) => r[s.field] || 0));
+      else o.series.forEach((s) => { if (r[s.field] != null) vals.push(r[s.field]); const t = tgtOf(s.target, r); if (t != null) vals.push(t); });
+    });
+    const hi = d3.max(vals) ?? 1, lo = Math.min(0, d3.min(vals) ?? 0);
+    const y = d3.scaleLinear([lo, hi > 0 ? hi * 1.1 : 1], [H - bottom, top]).nice();
+    const ticks = y.ticks(4);
+    const tdec = o.dec > 0 && y.domain()[1] - y.domain()[0] < 4 ? Math.min(o.dec, 2) : 0;
+    const gy = svg.append('g').attr('class', 'tk-axis');
+    const yt = gy.selectAll('text').data(ticks).join('text').text((d) => fmt(d, tdec));
+    let ml = 0;
+    yt.each(function () { ml = Math.max(ml, this.getComputedTextLength()); });
+    ml += 10;
+    const mr = 22;
+    const x = d3.scaleBand(rows.map((r) => r.period), [ml, W - mr]).paddingInner(0.28).paddingOuter(0.14);
+    const cx = (r) => x(r.period) + x.bandwidth() / 2;
+    yt.attr('x', ml - 8).attr('y', (d) => y(d)).attr('dy', '0.32em').attr('text-anchor', 'end');
+    svg.insert('g', ':first-child').selectAll('line').data(ticks).join('line')
+      .attr('class', 'tk-gl').attr('x1', ml).attr('x2', W - mr).attr('y1', (d) => y(d)).attr('y2', (d) => y(d));
+    svg.append('line').attr('class', 'tk-axisline').attr('x1', ml).attr('x2', W - mr).attr('y1', y(0)).attr('y2', y(0));
+    const maxLabels = Math.max(1, Math.floor((W - ml - mr) / 62));
+    const step = Math.ceil(rows.length / maxLabels);
+    svg.append('g').attr('class', 'tk-axis').selectAll('text')
+      .data(rows.filter((r, i) => (rows.length - 1 - i) % step === 0)).join('text')
+      .attr('x', cx).attr('y', H - 8).attr('text-anchor', 'middle').text((r) => xl(r.period));
+
+    const bw = Math.min(32, x.bandwidth());
+    if (o.kind === 'bars') {
+      const s = o.series[0];
+      const pts = rows.filter((r) => r[s.field] != null);
+      svg.append('g').selectAll('rect').data(pts).join('rect')
+        .attr('x', (r) => cx(r) - bw / 2).attr('width', bw)
+        .attr('y', (r) => Math.min(y(r[s.field]), y(0))).attr('height', (r) => Math.max(1, Math.abs(y(r[s.field]) - y(0))))
+        .attr('rx', 3)
+        .attr('class', (r) => { const t = tgtOf(s.target, r); return 'tk-bar ' + (t == null ? '' : r[s.field] > t ? 'tk-fill-bad' : 'tk-fill-ok'); });
+      if (s.target) {
+        svg.append('g').selectAll('line').data(rows.filter((r) => tgtOf(s.target, r) != null)).join('line')
+          .attr('class', 'tk-ref').attr('x1', (r) => cx(r) - bw / 2 - 4).attr('x2', (r) => cx(r) + bw / 2 + 4)
+          .attr('y1', (r) => y(tgtOf(s.target, r))).attr('y2', (r) => y(tgtOf(s.target, r)));
+      }
+    } else if (o.kind === 'lines') {
+      o.series.forEach((s, i) => {
+        const pts = rows.filter((r) => r[s.field] != null);
+        svg.append('path').datum(pts).attr('class', 'tk-line').style('stroke', dash.colors[i])
+          .attr('d', d3.line().x(cx).y((r) => y(r[s.field])));
+        svg.append('g').selectAll('circle').data(pts).join('circle').attr('r', 4).attr('cx', cx).attr('cy', (r) => y(r[s.field]))
+          .attr('class', (r) => { const t = tgtOf(s.target, r); return t == null ? '' : r[s.field] > t ? 'tk-fill-bad' : 'tk-fill-ok'; })
+          .style('stroke', dash.colors[i]);
+      });
+    } else {
+      const g = svg.append('g');
+      rows.forEach((r) => {
+        let acc = 0;
+        o.series.forEach((s, i) => {
+          const v = r[s.field] || 0;
+          if (!v) return;
+          g.append('rect').attr('x', cx(r) - bw / 2).attr('width', bw).attr('y', y(acc + v)).attr('height', Math.max(0.5, y(acc) - y(acc + v)))
+            .style('fill', dash.colors[i]);
+          acc += v;
+        });
+      });
+    }
+    // tooltip
+    const tip = document.createElement('div');
+    tip.className = 'tk-tip';
+    tip.hidden = true;
+    el.append(tip);
+    const hover = svg.append('rect').attr('class', 'tk-hover').attr('y', top).attr('height', H - top - bottom).attr('width', x.step()).attr('x', -999);
+    svg.append('g').selectAll('rect').data(rows).join('rect')
+      .attr('x', (r) => x(r.period) - (x.step() - x.bandwidth()) / 2).attr('width', x.step()).attr('y', 0).attr('height', H).attr('fill', 'transparent')
+      .on('pointerenter pointermove', (ev, r) => {
+        hover.attr('x', x(r.period) - (x.step() - x.bandwidth()) / 2);
+        tip.replaceChildren();
+        const h = document.createElement('div');
+        h.className = 'tk-tip-h';
+        h.textContent = o.grain === 'month' ? monthLabel(r.period) : label('date', r);
+        tip.append(h);
+        o.series.forEach((s, i) => {
+          const v = r[s.field];
+          if (v == null) return;
+          const line = document.createElement('div');
+          line.className = 'tk-tip-l';
+          if (o.series.length > 1) { const sw = document.createElement('i'); sw.style.background = dash.colors[i]; line.append(sw); }
+          const t = tgtOf(s.target, r);
+          line.append((s.name ? s.name + '  ' : '') + fmt(v, o.dec) + (o.unit || '') + (t != null ? '  ·  std ' + fmt(t, o.dec) + (o.unit || '') : ''));
+          if (t != null) line.classList.add(v > t ? 'tk-bad' : 'tk-ok');
+          tip.append(line);
+        });
+        if (o.kind === 'stack') {
+          const line = document.createElement('div');
+          line.className = 'tk-tip-l tk-tip-total';
+          line.append('Total  ' + fmt(d3.sum(o.series, (s) => r[s.field] || 0), o.dec) + (o.unit || ''));
+          tip.append(line);
+        }
+        tip.hidden = false;
+        const [mx, my] = d3.pointer(ev, el);
+        const tw = tip.offsetWidth, th = tip.offsetHeight;
+        tip.style.left = Math.max(0, Math.min(mx + 14, el.clientWidth - tw)) + 'px';
+        tip.style.top = Math.max(0, Math.min(my - th - 8, el.clientHeight - th)) + 'px';
+      })
+      .on('pointerleave', () => { tip.hidden = true; hover.attr('x', -999); });
+  };
+
+  return { isoWeek, weekDays, weekLabel, LIMITS, RAW, status, rowsOf, sel, extra, get, splitRows, fmt, mark, tgtOf, label, monthLabel, waiting, empty, chart };
+})();
+
+
+</script>
+<script>
+
+// Tabs
+const tkShow = (name) => {
+  document.querySelectorAll('.tk-tab').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
+  document.querySelectorAll('.tk-page').forEach((s) => { s.hidden = s.id !== name; });
+};
+document.querySelectorAll('.tk-tab').forEach((b) => b.addEventListener('click', () => { tkShow(b.dataset.tab); dash.setLink(b.dataset.tab); }));
+{
+  const want = location.hash.slice(1);
+  if ([...document.querySelectorAll('.tk-page')].some((s) => s.id === want)) tkShow(want);
+}
+
+// Break-down-by switches
+document.querySelectorAll('.tk-seg-b').forEach((b) => b.addEventListener('click', () => {
+  const g = b.dataset.segGroup;
+  document.querySelectorAll('.tk-seg-b').forEach((x) => { if (x.dataset.segGroup === g) x.setAttribute('aria-pressed', String(x === b)); });
+  document.querySelectorAll('[data-seg-panel]').forEach((p) => { if (p.dataset.segPanel === g) p.hidden = p.dataset.seg !== b.dataset.seg; });
+}));
+
+// Reset filters
+document.querySelectorAll('.tk-reset').forEach((b) => b.addEventListener('click', () => dash.resetParams()));
+dash.onData(() => {
+  const p = dash.params();
+  const on = Object.keys(p).some((k) => p[k] != null && p[k] !== '' && p[k] !== 'All');
+  document.querySelectorAll('.tk-reset').forEach((b) => { b.disabled = !on; });
+});
+
+// Legend swatches take the series colours
+dash.onData(() => {
+  document.querySelectorAll('.tk-legend').forEach((lg) => lg.querySelectorAll('i').forEach((i, n) => { i.style.background = dash.colors[n % dash.colors.length]; }));
+});
+
+// Filter choices come from the sheet itself
+dash.draw('opt', (sel) => {
+  const p = sel.dataset.param;
+  const set = new Set();
+  const month = dash.params().month;
+  for (const id of TK.RAW) {
+    const rows = TK.rowsOf(id);
+    if (rows) for (const r of rows) {
+      if (!r.date) continue;
+      if (p === 'week' && month && month !== 'All' && !r.date.startsWith(month)) continue;
+      const v = p === 'month' ? r.date.slice(0, 7) : p === 'week' ? TK.isoWeek(r.date) : r[p];
+      if (v) set.add(v);
+    }
+  }
+  const cur = dash.params()[p] || 'All';
+  const vals = [...set].sort();
+  if (p === 'month' || p === 'week') vals.reverse();
+  if (cur !== 'All' && !set.has(cur)) vals.push(cur);
+  const lab = (v) => (p === 'month' ? TK.monthLabel(v) : p === 'week' ? TK.weekLabel(v) : v);
+  sel.replaceChildren(new Option(sel.dataset.all, 'All'), ...vals.map((v) => new Option(lab(v), v)));
+  sel.value = cur;
+  sel.onchange = () => dash.setParams(p === 'month' ? { month: sel.value, week: 'All' } : { [p]: sel.value });
+});
+
+// Filters on each chart: from / to day, week, shift, SKU (empty = follow the top filters)
+dash.draw('copt', (sel) => {
+  const dim = sel.dataset.dim, p = sel.dataset.p;
+  const set = new Set();
+  for (const id of TK.RAW) { const rows = TK.rowsOf(id); if (rows) for (const r of rows) { const v = dim === 'week' ? (r.date ? TK.isoWeek(r.date) : null) : r[dim]; if (v) set.add(v); } }
+  const cur = dash.params()[p] || '';
+  const vals = [...set].sort();
+  if (dim === 'week') vals.reverse();
+  if (cur && !set.has(cur)) vals.push(cur);
+  sel.replaceChildren(new Option(sel.dataset.all, ''), ...vals.map((v) => new Option(dim === 'week' ? TK.weekLabel(v) : v, v)));
+  sel.value = cur;
+  sel.onchange = () => dash.setParams({ [p]: sel.value || null });
+});
+document.querySelectorAll('.tk-cf-d').forEach((inp) => {
+  inp.addEventListener('change', () => {
+    if (!inp.value) dash.setParams({ [inp.dataset.p]: null });
+    else if (inp.validity.valid) dash.setParams({ [inp.dataset.p]: inp.value });
+  });
+  inp.addEventListener('blur', () => { inp.value = dash.params()[inp.dataset.p] || ''; });
+});
+document.querySelectorAll('.tk-cf-clear').forEach((b) => b.addEventListener('click', () => {
+  const c = b.dataset.chart;
+  dash.setParams({ [c + '_from']: null, [c + '_to']: null, [c + '_week']: null, [c + '_shift']: null, [c + '_sku']: null });
+}));
+dash.onData(() => {
+  const p = dash.params();
+  document.querySelectorAll('.tk-cf-d').forEach((inp) => { if (inp !== document.activeElement) inp.value = p[inp.dataset.p] || ''; });
+  document.querySelectorAll('.tk-cf-clear').forEach((b) => {
+    const c = b.dataset.chart;
+    b.disabled = !['from', 'to', 'week', 'shift', 'sku'].some((k) => p[c + '_' + k]);
+  });
+});
+
+// A single figure; colours itself red above its standard, green at or below
+dash.draw('kpi', (el) => {
+  const id = el.dataset.source, f = el.dataset.field, dec = +(el.dataset.dec ?? 2);
+  const tile = el.closest('.tk-tile');
+  const pills = tile && el.dataset.pill != null ? tile.querySelectorAll('.tk-pill') : [];
+  el.classList.remove('tk-bad', 'tk-ok');
+  pills.forEach((p) => { p.hidden = true; });
+  const st = TK.status(id);
+  if (st !== 'ok') { TK.waiting(el, st); if (st !== 'error') el.textContent = '—'; return; }
+  el.classList.remove('dash-skeleton');
+  el.replaceChildren();
+  const r = TK.get(id, TK.extra(el));
+  if (!r || r[f] == null) { el.textContent = '—'; return; }
+  if (el.dataset.signed != null && r[f] > 0) el.append('+');
+  el.append(TK.mark(id, f, r, dec));
+  const t = TK.tgtOf(el.dataset.target, r);
+  if (t != null) {
+    const bad = r[f] > t;
+    el.classList.add(bad ? 'tk-bad' : 'tk-ok');
+    pills.forEach((p) => { p.hidden = p.classList.contains('bad') !== bad; });
+  }
+});
+
+// A fixed limit, written where it shows
+dash.draw('limit', (el) => { el.textContent = TK.fmt(TK.LIMITS[el.dataset.limit], +(el.dataset.dec ?? 2)); });
+
+// How many standards are breached for the current selection
+const TK_CHECKS = [
+  ['wrapper_cube', 'w_waste_pct', 'w_allow_pct'], ['wrapper_cube', 'l_waste_pct', 'l_allow_pct'], ['wrapper_cube', 's_waste_pct', 's_allow_pct'],
+  ['broken_cube', 'broken_pct', '@broken'], ['gas_cube', 'per_mt', 'std'], ['elec_cube', 'per_mt', 'std'], ['manpower_cube', 'per_kg', 'std'],
+];
+const tkChecks = () => {
+  if (TK_CHECKS.some(([id]) => TK.status(id) === 'loading')) return null;
+  let over = 0, n = 0;
+  for (const [id, f, t] of TK_CHECKS) {
+    const r = TK.get(id);
+    const tv = TK.tgtOf(t, r);
+    if (!r || r[f] == null || tv == null) continue;
+    n++;
+    if (r[f] > tv) over++;
+  }
+  return { over, n };
+};
+dash.draw('over', (el) => { const c = tkChecks(); el.textContent = c ? String(c.over) : '—'; el.classList.toggle('tk-bad', !!c && c.over > 0); el.classList.toggle('tk-ok', !!c && c.over === 0); });
+dash.draw('checked', (el) => { const c = tkChecks(); el.textContent = c ? String(c.n) : '—'; });
+
+// Charts
+const tkSeries = (el) => {
+  const f = el.dataset.fields.split(','), n = (el.dataset.names || '').split(','), t = (el.dataset.targets || '').split(',');
+  return f.map((field, i) => ({ field, name: n[i] || '', target: t[i] || el.dataset.target || null }));
+};
+const tkChart = (kind) => (el) => {
+  const id = el.dataset.source, st = TK.status(id);
+  if (st !== 'ok') return TK.waiting(el, st);
+  const grain = el.dataset.grain || 'day';
+  const ex = TK.extra(el), c = el.dataset.chart, p = dash.params();
+  if (c) for (const k of ['shift', 'sku', 'from', 'to', 'week']) if (p[c + '_' + k]) ex[k] = p[c + '_' + k];
+  TK.chart(el, { kind, grain, rows: TK.splitRows(id, grain === 'month' ? 'month' : 'date', ex), series: tkSeries(el), dec: +(el.dataset.dec ?? 2), unit: el.dataset.unit || '' });
+};
+dash.draw('bars', tkChart('bars'));
+dash.draw('lines', tkChart('lines'));
+dash.draw('stack', tkChart('stack'));
+
+// Break-down tables
+dash.draw('split', (tb) => {
+  const id = tb.dataset.source, dim = tb.dataset.dim;
+  const cols = tb.dataset.cols.split(',').map((c) => { const [field, dec, tgt] = c.split(':'); return { field, dec: +dec, tgt }; });
+  tb.replaceChildren();
+  const table = tb.closest('table');
+  const st = TK.status(id);
+  if (table) table.classList.toggle('dash-skeleton', st === 'loading');
+  const rows = TK.splitRows(id, dim, TK.extra(tb));
+  if (!rows) return;
+  if (dim === 'date' || dim === 'month') rows.reverse();
+  if (!rows.length) {
+    const td = tb.insertRow().insertCell();
+    td.colSpan = cols.length + 1;
+    td.className = 'tk-empty';
+    td.textContent = 'No entries for this selection';
+    return;
+  }
+  for (const r of rows) {
+    const tr = tb.insertRow();
+    const k = tr.insertCell();
+    k.className = 'tk-key';
+    k.textContent = TK.label(dim, r);
+    for (const c of cols) {
+      const td = tr.insertCell();
+      td.className = 'tk-n';
+      if (r[c.field] == null) { td.textContent = '—'; continue; }
+      td.append(TK.mark(id, c.field, r, c.dec));
+      const t = TK.tgtOf(c.tgt, r);
+      if (t != null) td.classList.add(r[c.field] > t ? 'tk-bad' : 'tk-ok');
+    }
+  }
+});
+
+
+</script>
+<script>dash.start();</script>
+</body>
+</html>
